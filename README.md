@@ -56,7 +56,7 @@ A connected assistant can stage additions, but the phone still owns review and c
 
 There is no automatic cross-platform sync. This preview does not provide the iPhone app's on-device LLM, widgets, external Calendar integration, notification delivery or CloudKit features.
 
-The published APK is the build tested on **3 October 2026**: 65 portable tests and five Compose workflows passed. An Android emulator also completed real private desktop pairing, proposal retrieval, phone review/save, receipt refresh, restart and file-based Undo followed by an undone desktop receipt. All 65 portable tests also passed from this standalone repository on 5 October 2026. CI is configured to compile the app and test APKs; its first result is pending. Publication does not constitute a fresh emulator run of every workflow.
+The published APK is the build tested on **3 October 2026**: 65 portable tests and five Compose workflows passed. An Android emulator also completed real private desktop pairing, proposal retrieval, phone review/save, receipt refresh, restart and file-based Undo followed by an undone desktop receipt. All 65 portable tests also passed from this standalone repository on 5 October 2026. [The first CI run](https://github.com/ravel7524/habits-android/actions/runs/37318116223) also passed the portable tests and compiled the app and test APKs. Publication does not constitute a fresh emulator run of every workflow.
 
 Physical phones and real LAN routing remain untested. Android runtime checks used adb, UI inspection and logs; Android LLDB attachment was unavailable. These results establish the tested emulator paths, not physical-device acceptance.
 

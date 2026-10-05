@@ -1,0 +1,22 @@
+.gradle/
+.kotlin/
+**/build/
+local.properties
+*.jks
+*.keystore
+
+# Device/runtime data and private signing material
+*.apk
+*.aab
+*.enc
+*.pem
+*.p12
+*.pfx
+*.sqlite*
+*.db
+.env
+.env.*
+.DS_Store
+.idea/
+captures/
+release/

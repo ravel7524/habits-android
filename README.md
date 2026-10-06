@@ -1,79 +1,72 @@
 # Habits for Android
 
-**0.1.0 development preview** · Android 8.0 or newer
+**0.4.0 development preview** · Android 8.0 or newer
 
-A native Android app for keeping daily work, appointments, habits and semester deadlines together. Add a task, log a habit, or turn an exam timetable into a proposal you can review before saving. Your planning data stays on your phone unless you choose to export or share it.
+A native Android app for daily work, appointments, habits and semester deadlines. Review an assistant's exam proposal before saving it, or use the planner independently. Your records stay on the phone unless you explicitly export or share them.
 
-This is a small, working starting point for continued development. It is not yet a production release or a complete counterpart to the iPhone app.
+## Download
 
-## What you can do
+Get the [0.4.0 preview](https://github.com/ravel7524/habits-android/releases/tag/v0.4.0) or [download the APK](https://github.com/ravel7524/habits-android/releases/download/v0.4.0/habits-android-0.4.0-debug.apk). The release includes checksums and a manifest. This is a debug-signed development build, not a Play Store release.
 
-- **Today:** see recorded deadlines, appointments and scheduled habits in one place.
-- **Planner:** create and edit tasks, assignments and appointments; review semester exams and deadlines; keep preparation separate from exam completion.
-- **Habits:** choose scheduled days, record today's completion and retain logs when archiving a routine.
-- **Reports:** open Morning, Evening and Weekly summaries generated offline from recorded facts. Missing logs are not treated as missed habits, and estimated work is not reported as time studied.
-- **Settings:** choose English, German or Spanish, switch appearance, export a local backup and restore the previous local backup when available.
+Open the APK with Android's browser or Files app. If asked, permit **Install unknown apps** for that app, then turn that permission off after installation. [Google's installation guidance](https://support.google.com/pixelphone/answer/7391672?hl=en) explains the setting; labels vary by device. Tasks and habits need no account or AI connection.
+
+**Existing installations:** 0.4 retains the separately held 0.2/0.3 development certificate and can update those builds in place. It uses a different certificate from public 0.1 and cannot update 0.1 in place. Export and retain your private backup before changing installations; uninstalling removes local data. Stable release signing and a supported 0.1 migration remain open.
+
+## Daily use
+
+- **Today:** open deadlines, saved appointments and scheduled habits before report entry.
+- **Planner:** tasks/assignments, appointments and semester assessments with separate preparation. Native date/time pickers preserve date-only work. Review, then Confirm before saving.
+- **Habits:** scheduled days, daily completion and retained logs/archive history. Missing logs are unknown, not inferred misses.
+- **Reports:** offline Morning, Evening and Weekly summaries from saved facts. Estimated minutes describe planned work, not time studied.
+- **Calendar:** optional read-only access to calendars you select; events stay out of assistant context.
+- **Notifications:** explicit permission and per-type opt-ins, quiet hours and Snooze; Android can delay inexact delivery. Report invitations do not run AI in the background.
+- **Widgets:** Next up and Today's habits use local records; titles can be seen by anyone viewing the home screen.
+- **Settings:** English/German/Spanish, appearance, local backup/recovery, archived history and optional device tools.
 
 <p>
-  <img src="docs/images/today.png" alt="Habits Today screen" width="260">
-  <img src="docs/images/plan-saved.png" alt="Reviewed academic proposal with a saved receipt" width="260">
+  <img src="docs/images/v0.4/today.png" alt="Synthetic populated Today" width="260">
+  <img src="docs/images/v0.4/work-preparation.png" alt="Synthetic Work view" width="260">
 </p>
 
-## Try the preview
+## Plan exams with Codex or Claude
 
-Download the [0.1.0 release](https://github.com/ravel7524/habits-android/releases/tag/v0.1.0) or the [APK directly](https://github.com/ravel7524/habits-android/releases/download/v0.1.0/habits-android-0.1.0-debug.apk).
+Open **Planner → Semester → Plan with an assistant**. Share the instructions and your original timetable with your chosen assistant, then open or paste its JSON proposal. Check course, exam date/time/zone and preparation. Nothing is added until **Confirm and save**. Completing preparation does not complete the exam. Reopening a proposal does not duplicate it; guarded Undo preserves unrelated work and a durable receipt. [Format and synthetic example](docs/contracts/README.md).
 
-1. Open the downloaded APK on your phone.
-2. If Android asks, allow **Install unknown apps** for the browser or Files app you used to open it. This permission applies to that app; the exact labels vary by phone. [Google's installation guidance](https://support.google.com/pixelphone/answer/7391672?hl=en) explains the setting.
-3. Install Habits, then turn that installation permission off again if you no longer need it.
-4. Start with a task in **Planner** or a routine in **Habits**. Neither requires an account or an AI connection.
+For connected delivery, install the separate [Habits MCP](https://github.com/ravel7524/habits-mcp) on your computer and use **Connect Codex or Claude** on the phone. It needs a reachable private desktop address. Pairing shares no records. You explicitly review one selected semester's context, including disclosed assessment notes/states, before sharing; an assistant may send that context to its provider. Offline file/paste import stays available.
 
-This APK is a **debug-signed development build**, not a Play Store release. Its SHA-256 is:
+Only phone review/confirmation applies a staged proposal. The desktop receives applied/undone receipts, with manual retry when delivery is unavailable. Version 1 adds academic content; it has no arbitrary app-code, UI-editing or destructive command.
 
-```text
-a991254265b9aa0c7292e81c97f4e83f163a655d9c8bf6f335ad9743af53b9ba
-```
+## Optional Liquid models on the phone
 
-Before trying another build, export a backup in Settings and keep it somewhere safe. Exports contain private records and notes. **Do not uninstall to work around an update failure:** uninstalling removes local app data.
+Settings → **On-device AI** provides separate selection, download, verification, load, unload and removal actions. Choosing a model never downloads or loads it automatically. The two pinned artifacts match the iPhone catalog:
 
-Signing continuity for this preview is not yet established: compatible updates require recovery of a retained private copy of the original signing key. Do not assume a future APK can update this installation in place. Stable release signing needs further work before routine upgrades.
+| Model | Download | Minimum total RAM |
+| --- | --- | --- |
+| LFM2.5 230M QAD Q4_0 · fast | about 149 MB | 2 GiB |
+| LFM2.5 2.6B QAD Q4_0 · reasoning | about 1.59 GB | 5 GiB |
 
-## Plan an exam with an assistant
+Each official Liquid GGUF is pinned to an immutable revision and verified by full size/SHA-256. Supported ARM64/x86_64 devices run CPU inference; 32-bit ARM retains basic planning without local AI. Downloads contact Hugging Face and approved HTTPS delivery hosts; inference sends no records/prompts to a cloud AI endpoint. Weights stay outside the APK, backups and desktop context. [Pinned licenses, delivery, contracts and scenarios](docs/ANDROID-LOCAL-AI.md).
 
-For example, you have a Statistics exam on **20 January 2027 at 09:00, Europe/Zurich**, and want an undated task called **Review statistics**.
+In a report, **Choose highlights** selects at most eight supplied fact IDs. The app displays their full original source records with readable dates/status, never model-authored claims. It rejects unknown IDs, duplicates, extra keys and prose. Changed source facts invalidate late results. Cancellation, backgrounding, timeout or missing models leave the recorded report available and release native memory; explicit reload is required. This is not the iPhone's full prose-generation feature set.
 
-Open **Planner → Semester → Plan with AI**. Share the instructions with your chosen assistant and give it the original timetable. Open its JSON proposal, or paste it, then check the course, exam date, time zone and preparation. Nothing is added until you select **Confirm and save**. The exam appears in Semester and the preparation appears in Work. Completing preparation does not complete the exam.
+## Validation and limits
 
-The same proposal can be opened again without creating duplicates. **Undo import** is guarded: it is available while the imported records remain unchanged and have no new dependent records. It preserves unrelated work and keeps a receipt that the proposal was undone.
+The 0.4 rework received an independent **8.6/10** review: all **69 reviewed states across 14 families** scored at least **8.5** (lowest raw 8.525). Review includes populated/empty/staged/error states, actual MainActivity OS font scale 1.3, native pickers/software keyboard and real model recovery. [Dated public verification](docs/verification/0.4.0/README.md) records build and screenshot boundaries.
 
-File and paste import work without a desktop connection. For a connected Codex or Claude workflow, install the separate [Habits MCP project](https://github.com/ravel7524/habits-mcp), then use **Connect Codex or Claude** on the phone. Pairing requires a reachable private desktop address. You choose a semester before sharing its academic context; the phone discloses included assessment notes and recorded states. The assistant may send shared context to its AI provider.
+**139 core tests, 3 formatting tests and 65 affected Android tests passed**; accepted emulator launches had native LLDB attached. Actual fast selected-result UI completed in 1.6 s; balanced UI completed in 59.5 s and its bounded recorded-report retry in 54.845 s. Balanced attempts also hit the fixed 90-second deadline, including the final publication APK recheck. That APK passed all seven focused fast-model tests; its balanced recheck timed out and safely retained the recorded report. Successful earlier runs do not resolve this repeated timing limitation. Exact publication checks are recorded in the release manifest.
 
-Developers can inspect the [proposal format and synthetic example](docs/contracts/README.md).
-
-A connected assistant can stage additions, but the phone still owns review and confirmation. A staged proposal is not a successful save. The paired desktop receives an applied or undone receipt after the phone changes its local records; unavailable receipt delivery is retried on manual refresh. Version 1 does not give assistants arbitrary app-code, screen-editing or deletion commands.
-
-## Current limits and verification
-
-There is no automatic cross-platform sync. This preview does not provide the iPhone app's on-device LLM, widgets, external Calendar integration, notification delivery or CloudKit features.
-
-The published APK is the build tested on **3 October 2026**: 65 portable tests and five Compose workflows passed. An Android emulator also completed real private desktop pairing, proposal retrieval, phone review/save, receipt refresh, restart and file-based Undo followed by an undone desktop receipt. All 65 portable tests also passed from this standalone repository on 5 October 2026. [The first CI run](https://github.com/ravel7524/habits-android/actions/runs/37318116223) also passed the portable tests and compiled the app and test APKs. Publication does not constitute a fresh emulator run of every workflow.
-
-Physical phones and real LAN routing remain untested. Android runtime checks used adb, UI inspection and logs; Android LLDB attachment was unavailable. These results establish the tested emulator paths, not physical-device acceptance.
+Physical phones, heat/battery pressure, full TalkBack, tablets/landscape, real LAN routing and prolonged idle notification delivery remain separate acceptance. There is no automatic iPhone/Android sync or CloudKit integration. Source/test builds and visual scores do not establish production or physical-device parity.
 
 ## Develop
 
-Use **JDK 21** and the checked-in Gradle wrapper. App builds also need Android SDK platform 37, build tools 36.0.0 and platform-tools, with the SDK licenses accepted in your own environment. Set your SDK location through `ANDROID_HOME` or a local, untracked `local.properties` file.
+Use **JDK 21** and the checked-in wrapper. App builds require SDK platform 37, build tools 36.0.0, **NDK 29.0.14206865** and **CMake 3.31.6**, with licenses accepted in your own environment. Set `ANDROID_HOME` or an untracked `local.properties`. CPU native code is vendored at a pinned upstream revision; weights are separate explicit downloads.
 
 ```sh
 ./gradlew -PcoreOnly=true :core:test
-./gradlew :app:assembleDebug :app:assembleDebugAndroidTest
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
 ./gradlew :app:connectedDebugAndroidTest
 ```
 
-The first command needs no Android SDK. The last command needs a running emulator or connected test device. UI tests use isolated synthetic stores. Toolchain versions are Gradle 9.3.1, Android Gradle Plugin 9.1.1 and Kotlin 2.4.10; compile SDK 37, target SDK 36 and minimum SDK 26.
+The first needs no Android SDK/NDK. Device/inference acceptance needs an adb target, actual verified weights and explicit fixture arguments; skipped or synthetic delivery tests do not prove inference. For operator runtime checks, follow [native debugger verification](docs/development/patterns/native-android-debugging.md). CI compiles app/test APKs and runs portable checks; it does not replace emulator/private-TLS/physical acceptance.
 
-See [Contributing](CONTRIBUTING.md), [Architecture](docs/ARCHITECTURE.md) and the tentative [Roadmap](ROADMAP.md).
-
-## License status
-
-No project license has been selected yet. Third-party components remain subject to their respective [licenses and notices](docs/licenses/README.md).
+Gradle 9.3.1, AGP 9.1.1 and Kotlin 2.4.10 are pinned; compile SDK 37, target SDK 36, minimum SDK 26. See [Contributing](CONTRIBUTING.md), [Architecture](docs/ARCHITECTURE.md) and [Roadmap](ROADMAP.md). No project license is selected; retained [third-party notices](docs/licenses/README.md) and Liquid model terms still apply.

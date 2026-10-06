@@ -1,6 +1,10 @@
 package ch.habits.android.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.printToLog
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -146,8 +150,9 @@ class HabitsWorkflowTest {
         compose.onNodeWithTag("nav.planner").performClick()
         compose.onNodeWithTag("planner.add.task").performClick()
         compose.onNodeWithTag("editor.task.title").performTextInput("Read notes")
-        compose.onNodeWithTag("editor.task").performScrollToNode(hasTestTag("editor.task.review"))
-        compose.onNodeWithTag("editor.task.review").performClick()
+        compose.onNodeWithTag("editor.task.title").performImeAction()
+        compose.waitForIdle()
+        compose.onNodeWithTag("editor.task.review").assertIsEnabled().assertIsDisplayed().performClick()
         assertEquals(0, repository.state.value.snapshot.tasks.size)
         compose.onNodeWithTag("editor.task.save").performClick()
         compose.waitUntil(10_000) { repository.state.value.snapshot.tasks.size == 1 }
@@ -158,9 +163,17 @@ class HabitsWorkflowTest {
         compose.onNodeWithTag("nav.habits").performClick()
         compose.onNodeWithTag("habits.add").performClick()
         compose.onNodeWithTag("editor.habit.title").performTextInput("Walk")
-        compose.onNodeWithTag("editor.habit").performScrollToNode(hasTestTag("editor.habit.review"))
-        compose.onNodeWithTag("editor.habit.review").performClick()
-        compose.onNodeWithTag("editor.habit.save").performClick()
+        compose.onNodeWithTag("editor.habit.title").performImeAction()
+        compose.waitForIdle()
+        compose.onNodeWithTag("editor.habit.review").assertIsEnabled().assertIsDisplayed().performClick()
+        try {
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("editor.habit.save").fetchSemanticsNodes().isNotEmpty() }
+        } catch (failure: Throwable) {
+            compose.onRoot().printToLog("HabitReviewFailure")
+            throw failure
+        }
+        assertEquals(0, repository.state.value.snapshot.habits.size)
+        compose.onNodeWithTag("editor.habit.save").assertIsDisplayed().performClick()
         compose.waitUntil(10_000) { repository.state.value.snapshot.habits.size == 1 }
         val habitID = repository.state.value.snapshot.habits.single().id
         compose.onNodeWithTag("habits.log.$habitID").performClick()
@@ -171,8 +184,8 @@ class HabitsWorkflowTest {
         compose.onNodeWithTag("today.report.evening").performClick()
         compose.onNodeWithTag("report.source").assertTextContains("Offline · deterministic summary")
         compose.onNodeWithTag("report.screen").performScrollToNode(hasTestTag("report.completedTasks"))
-        compose.onNodeWithTag("report.completedTasks").assertTextContains("1 tasks or assignments")
-        compose.onNodeWithTag("report.habitLogs").assertTextContains("1 habit logs")
+        compose.onNodeWithTag("report.completedTasks").assertTextContains("1 task or assignment")
+        compose.onNodeWithTag("report.habitLogs").assertTextContains("1 habit log")
     }
 
     private fun openAssistant() {

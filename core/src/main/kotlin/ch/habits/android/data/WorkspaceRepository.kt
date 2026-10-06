@@ -42,6 +42,9 @@ class WorkspaceRepository(private val file: File) {
     private val mutableState = MutableStateFlow(loadInitial())
     val state: StateFlow<WorkspaceState> = mutableState.asStateFlow()
 
+    /** Refresh device-owned projections after receiver/widget writes or process restart. */
+    suspend fun refresh(): WorkspaceState = locked { state.value }
+
     suspend fun preview(plan: AcademicPlan): PlanPreview = locked {
         requireWritable()
         makePreview(plan, state.value.snapshot)
@@ -146,10 +149,22 @@ class WorkspaceRepository(private val file: File) {
         snapshot.copy(habits = replacing(snapshot.habits, habit.copy(archived = true)) { it.id })
     }
 
-    suspend fun logHabit(id: String, date: String, completed: Boolean = true) = mutate { snapshot ->
+    suspend fun logHabit(id: String, date: String, completed: Boolean = true,
+        expectedRevision: Long? = null, expectedCompleted: Boolean? = null, scheduledTodayOnly: Boolean = false) = mutate { snapshot ->
         val habitID = canonical(id)
-        requireWorkspace(snapshot.habits.any { it.id == habitID && !it.archived }, "This habit is unavailable.")
+        val habit = snapshot.habits.firstOrNull { it.id == habitID && !it.archived }
+            ?: throw WorkspaceException("This habit is unavailable.")
         validDate(date)
+        if (expectedRevision != null) requireWorkspace(snapshot.revision == expectedRevision, "The widget is stale; refresh before changing this habit.")
+        if (scheduledTodayOnly) {
+            val today = LocalDate.now()
+            requireWorkspace(date == today.toString() && today.dayOfWeek.value in habit.weekdays,
+                "This widget no longer refers to a habit scheduled today.")
+        }
+        if (expectedCompleted != null) {
+            val actual = snapshot.habitLogs.any { it.habitID == habitID && it.date == date && it.completed }
+            requireWorkspace(actual == expectedCompleted && completed != expectedCompleted, "This habit log changed; refresh the widget.")
+        }
         val log = HabitLog(habitID, date, completed)
         if (snapshot.habitLogs.find { it.habitID == habitID && it.date == date } == log) snapshot
         else snapshot.copy(habitLogs = snapshot.habitLogs.filterNot { it.habitID == habitID && it.date == date } + log)

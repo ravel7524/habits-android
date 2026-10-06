@@ -1,6 +1,6 @@
 # Roadmap
 
-Habits for Android is a 0.1.0 development preview. This is a tentative order of work, not a release schedule or a promise that every idea will ship.
+Habits for Android 0.4 is a development preview with selected read-only Calendar, opt-in reminders/widgets, two optional Liquid models and a reworked native UI. Emulator checks and independent visual review passed; physical-device, stable signing/migration and real-LAN acceptance remain open. This is a tentative order of work, not a release schedule or a promise that every idea will ship.
 
 ## First: make the preview dependable
 
@@ -12,8 +12,10 @@ Habits for Android is a 0.1.0 development preview. This is a tentative order of 
 ## Then: improve daily use
 
 - Refine planner navigation and semester presentation as real usage exposes gaps.
-- Investigate Android notification delivery and optional Calendar integration, with explicit permissions and separate runtime verification.
+- Validate the implemented read-only Calendar, opt-in reminders and native widgets on physical devices and real OEM power-management/launcher combinations.
 - Improve Morning, Evening and Weekly reports while keeping recorded facts, planned estimates and missing data clearly distinguished.
+- Extend emulator-verified model delivery and CPU JNI report selection to physical devices: download interruption/restart, checksum failures, foreground cancellation, memory release/reload, bounded context, stale source facts and recorded-report fallback. Keep weights out of the APK, backups and assistant exports.
+- Check report-highlight usefulness, latency, heat and memory on physical ARM64 phones before treating emulator inference as everyday-device acceptance. Unsupported devices must retain the basic reports.
 
 ## Explore separately
 

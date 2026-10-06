@@ -20,3 +20,14 @@ local.properties
 .idea/
 captures/
 release/
+
+**/.cxx/
+
+**/.externalNativeBuild/
+
+# Downloaded model weights and retained delivery partials
+*.gguf
+*.gguf.*
+*.partial
+*.key
+*.csr

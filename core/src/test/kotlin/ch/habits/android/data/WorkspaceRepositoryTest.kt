@@ -463,4 +463,31 @@ class WorkspaceRepositoryTest {
         assertTrue(snapshot.tasks.all { it.sourceAssessmentID in snapshot.assessments.map { assessment -> assessment.id } })
         assertTrue(snapshot.assessments.none { it.completed })
     } }
+    @Test fun widgetPreconditionsAreCheckedInsideTheSharedWriter() = runBlocking { fixture { repository, file ->
+        val today = LocalDate.now()
+        val habit = Habit(title = "Synthetic widget habit", weekdays = listOf(today.dayOfWeek.value))
+        repository.saveHabit(habit)
+        val reviewedRevision = repository.state.value.snapshot.revision
+        // A separate writer changes another source after the widget snapshot.
+        val other = WorkspaceRepository(file)
+        other.saveTask(WorkTask(title = "Intervening task"))
+        assertFailsWith<WorkspaceException> {
+            repository.logHabit(habit.id, today.toString(), true, reviewedRevision, false, true)
+        }
+        repository.refresh()
+        assertTrue(repository.state.value.snapshot.habitLogs.isEmpty())
+        val fresh = repository.state.value.snapshot.revision
+        repository.logHabit(habit.id, today.toString(), true, fresh, false, true)
+        assertEquals(1, repository.state.value.snapshot.habitLogs.count { it.completed })
+        assertFailsWith<WorkspaceException> {
+            repository.logHabit(habit.id, today.toString(), true, fresh, false, true)
+        }
+        val now = repository.state.value.snapshot.revision
+        assertFailsWith<WorkspaceException> {
+            repository.logHabit(habit.id, today.minusDays(1).toString(), false, now, true, true)
+        }
+        assertEquals(1, repository.state.value.snapshot.habitLogs.count { it.completed })
+        assertEquals(1, repository.state.value.snapshot.tasks.size)
+    } }
+
 }

@@ -15,6 +15,8 @@ import androidx.compose.material.icons.outlined.ListAlt
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material3.Card
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -29,6 +31,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +55,7 @@ import ch.habits.android.data.WorkspaceFacts
 import ch.habits.android.data.WorkspaceRepository
 import java.time.LocalDate
 import java.util.Locale
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -63,6 +67,12 @@ import kotlinx.coroutines.withContext
 fun HabitsApp(
     repository: WorkspaceRepository,
     desktopSection: @Composable (onPlan: (AcademicPlan) -> Unit) -> Unit = {},
+    integrationsSection: @Composable (focus: String?) -> Unit = {},
+    calendarSection: @Composable (day: LocalDate?, onRecovery: () -> Unit) -> Unit = { _, _ -> },
+    reportAISection: @Composable (kind: String, snapshot: ch.habits.android.data.WorkspaceSnapshot, scope: CoroutineScope, onSetup: () -> Unit) -> Unit = { _, _, _, _ -> },
+    onReportAIExit: () -> Unit = {},
+    destination: String? = null,
+    destinationRevision: Int = 0,
 ) {
     val state by repository.state.collectAsStateWithLifecycle()
     val snapshot = state.snapshot
@@ -72,6 +82,7 @@ fun HabitsApp(
     var tab by rememberSaveable { mutableStateOf("today") }
     var plannerMode by rememberSaveable { mutableStateOf("work") }
     var settings by rememberSaveable { mutableStateOf(false) }
+    var settingsFocus by rememberSaveable { mutableStateOf<String?>(null) }
     var assistant by rememberSaveable { mutableStateOf(false) }
     var report by rememberSaveable { mutableStateOf<String?>(null) }
     var editor by remember { mutableStateOf<String?>(null) }
@@ -83,9 +94,23 @@ fun HabitsApp(
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
+    var editorFailureMessage by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
-    fun closeDetail() { settings = false; assistant = false; report = null; editor = null }
+    fun closeDetail() { settings = false; settingsFocus = null; assistant = false; report = null; editor = null }
+    fun openSettingsSection(section: String?) { editor = null; assistant = false; report = null; settingsFocus = section; settings = true }
+    LaunchedEffect(destination, destinationRevision) {
+        if (destination != null) {
+            closeDetail()
+            when (destination) {
+                "planner" -> { tab = "planner"; plannerMode = "work" }
+                "semester" -> { tab = "planner"; plannerMode = "semester" }
+                "habits" -> tab = "habits"
+                "morning", "evening", "weekly" -> report = destination
+                else -> tab = "today"
+            }
+        }
+    }
     fun action(message: String, closeEditor: Boolean = false, undo: (suspend () -> Unit)? = null, block: suspend () -> Unit) {
         if (busy) return
         scope.launch {
@@ -105,8 +130,9 @@ fun HabitsApp(
             } catch (failure: Exception) {
                 if (failure is CancellationException) throw failure
                 busy = false
-                snackbar.showSnackbar(failure.message ?: copy.t("The action could not be saved.", "Die Änderung konnte nicht gespeichert werden.", "No se pudo guardar la acción."),
-                    withDismissAction = true, duration = SnackbarDuration.Long)
+                val failureMessage = failure.message ?: copy.t("The change could not be confirmed.", "Die Änderung konnte nicht bestätigt werden.", "No se pudo confirmar el cambio.")
+                if (editor != null) editorFailureMessage = failureMessage
+                else snackbar.showSnackbar(failureMessage, withDismissAction = true, duration = SnackbarDuration.Long)
             } finally { busy = false }
         }
     }
@@ -121,12 +147,17 @@ fun HabitsApp(
     }
     val detailOpen = settings || assistant || report != null || editor != null
     BackHandler(enabled = detailOpen) { closeDetail() }
+    LaunchedEffect(editor) { editorFailureMessage = null }
+    // Pending success/Undo feedback from another screen must not intercept the editor footer.
+    LaunchedEffect(editor, snackbar.currentSnackbarData) {
+        if (editor != null) snackbar.currentSnackbarData?.dismiss()
+    }
 
     HabitsTheme(dark) {
         Scaffold(modifier = Modifier.semantics { testTagsAsResourceId = true }, containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 val heading = when {
-                    assistant -> copy.t("Plan with AI", "Mit KI planen", "Planificar con IA")
+                    assistant -> copy.t("Plan with an assistant", "Mit einem Assistenten planen", "Planificar con un asistente")
                     settings -> copy.settings
                     report != null -> reportTitle(report!!, copy)
                     editor == "task" -> copy.t("Task or assignment", "Aufgabe oder Abgabe", "Tarea o entrega")
@@ -136,12 +167,12 @@ fun HabitsApp(
                     tab == "habits" -> copy.habits
                     else -> copy.today
                 }
-                CenterAlignedTopAppBar(title = { Text(heading) }, navigationIcon = {
+                CenterAlignedTopAppBar(title = { Text(heading, style = MaterialTheme.typography.titleLarge) }, navigationIcon = {
                     if (detailOpen) IconButton(onClick = { closeDetail() }, modifier = Modifier.testTag(if (assistant) "assistant.plan.close" else "detail.close")) {
                         Icon(Icons.Outlined.ArrowBack, contentDescription = copy.close)
                     }
                 }, actions = {
-                    if (!detailOpen) IconButton(onClick = { settings = true }, modifier = Modifier.testTag("settings.open")) {
+                    if (!detailOpen) IconButton(onClick = { openSettingsSection(null) }, modifier = Modifier.testTag("settings.open")) {
                         Icon(Icons.Outlined.Settings, contentDescription = copy.settings)
                     }
                 })
@@ -154,7 +185,7 @@ fun HabitsApp(
                         }, label = { Text(when (value) { "planner" -> copy.planner; "habits" -> copy.habits; else -> copy.today }) },
                         modifier = Modifier.testTag("nav.$value"))
                 }
-            }, snackbarHost = { SnackbarHost(snackbar) }) { padding ->
+            }, snackbarHost = { if (editor == null) SnackbarHost(snackbar) }) { padding ->
             Column(Modifier.fillMaxSize().padding(padding)) {
                 if (state.recoveryRequired) Card(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp).testTag("workspace.recovery")
                     .semantics { liveRegion = LiveRegionMode.Polite }) {
@@ -170,14 +201,18 @@ fun HabitsApp(
                 val writable = !busy && !state.recoveryRequired
                 when {
                     assistant -> AssistantPlanScreen(repository, state, selectedSemester?.id, copy, desktopSection)
-                    settings -> SettingsScreen(state, copy, busy,
+                    settings -> SettingsScreen(state, copy, busy, focusSection = settingsFocus, integrationsSection = { integrationsSection(settingsFocus) },
                         onPreferences = { value -> action(copy.t("Settings saved", "Einstellungen gespeichert", "Ajustes guardados")) { repository.savePreferences(value) } },
                         onExport = { exporter.launch("habits-backup-${LocalDate.now()}.json") },
                         onRestoreBackup = { action(copy.t("Backup restored", "Sicherung wiederhergestellt", "Copia restaurada")) { repository.restoreBackup() } },
                         onRestoreTask = { value -> action(copy.t("Task restored", "Aufgabe wiederhergestellt", "Tarea restaurada")) { repository.saveTask(value.copy(archived = false)) } },
                         onRestoreHabit = { value -> action(copy.t("Habit restored", "Gewohnheit wiederhergestellt", "Hábito restaurado")) { repository.saveHabit(value.copy(archived = false)) } },
                         onRestoreAppointment = { value -> action(copy.t("Appointment restored", "Termin wiederhergestellt", "Cita restaurada")) { repository.saveAppointment(value.copy(archived = false)) } })
-                    report != null -> ReportScreen(report!!, snapshot, copy)
+                    report != null -> {
+                        val reportKind = report!!
+                        ReportScreen(reportKind, snapshot, copy, calendarSection = { calendarSection(LocalDate.now()) { openSettingsSection("calendar") } },
+                            aiSection = { reportScope -> reportAISection(reportKind, snapshot, reportScope) { openSettingsSection("localai") } }, onAIExit = onReportAIExit, onCalendarRecovery = { openSettingsSection("calendar") })
+                    }
                     editor == "task" -> TaskEditor(editingTask, copy, busy,
                         onSave = { value ->
                             val previous = editingTask
@@ -210,6 +245,7 @@ fun HabitsApp(
                         }, onArchive = { value -> action(copy.t("Habit archived; logs retained", "Gewohnheit archiviert; Protokolle erhalten", "Hábito archivado; registros conservados"), closeEditor = true,
                             undo = { repository.saveHabit(value.copy(archived = false)) }) { repository.archiveHabit(value.id) } })
                     tab == "planner" -> PlannerScreen(snapshot, copy, writable, plannerMode, { plannerMode = it }, selectedSemester?.id,
+                        calendarSection = { calendarSection(null) { openSettingsSection("calendar") } },
                         onSelectSemester = { semesterID = it }, onAssistant = { assistant = true },
                         onNewTask = { editingTask = null; editor = "task" }, onEditTask = { editingTask = it; editor = "task" },
                         onCompleteTask = { value ->
@@ -231,9 +267,18 @@ fun HabitsApp(
                             action(copy.t("Habit log updated", "Gewohnheitsprotokoll aktualisiert", "Registro actualizado"),
                                 undo = { repository.logHabit(habit.id, today, previous) }) { repository.logHabit(habit.id, today, completed) }
                         })
-                    else -> TodayScreen(snapshot, copy, onReport = { report = it }, onPlanner = { tab = "planner" })
+                    else -> TodayScreen(snapshot, copy, onReport = { report = it }, onPlanner = { tab = "planner" }, calendarSection = { calendarSection(LocalDate.now()) { openSettingsSection("calendar") } }, onCalendarRecovery = { openSettingsSection("calendar") })
                 }
             }
+        }
+        editorFailureMessage?.let { message ->
+            AlertDialog(onDismissRequest = { editorFailureMessage = null },
+                title = { Text(copy.t("Change could not be confirmed", "Änderung konnte nicht bestätigt werden", "No se pudo confirmar el cambio")) },
+                text = { Text(message + "\n\n" + copy.t("Check your saved records before trying again. Your draft stays open.",
+                    "Prüfe deine gespeicherten Einträge vor einem neuen Versuch. Dein Entwurf bleibt geöffnet.",
+                    "Comprueba los registros guardados antes de reintentarlo. Tu borrador sigue abierto.")) },
+                confirmButton = { TextButton(onClick = { editorFailureMessage = null }, modifier = Modifier.testTag("editor.saveError.close")) { Text(copy.close) } },
+                modifier = Modifier.testTag("editor.saveError"))
         }
     }
 }

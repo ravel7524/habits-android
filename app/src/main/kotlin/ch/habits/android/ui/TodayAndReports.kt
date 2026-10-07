@@ -70,14 +70,14 @@ internal fun TodayScreen(
                 deadline(item.dueDate, item.dueTime, zone, copy, unknownTime = true), item.dueDate)
         }
     val dueTaskIDs = dueTasks.map { it.id }.toSet()
-    val futureTasks = snapshot.tasks.filter { !it.archived && !it.completed && it.id !in dueTaskIDs }
+    val futureTasks = snapshot.tasks.filter { !it.archived && !it.completed && it.id !in dueTaskIDs && it.id !in facts.unresolvedTaskIDs }
         .sortedWith(compareBy<WorkTask> { it.dueDate ?: "9999-12-31" }.thenBy { it.id })
         .map { TodayWork("task/${it.id}", it.title, taskKind(it, copy), taskDeadline(it, copy), it.dueDate) }
     val dueAssessmentIDs = dueAssessments.map { it.id }.toSet()
     val liveSemesterIDs = snapshot.semesters.filter { !it.archived }.map { it.id }.toSet()
-    val liveCourseIDs = snapshot.courses.filter { !it.archived }.map { it.id }.toSet()
-    val futureAssessments = snapshot.assessments.filter { !it.archived && !it.completed && it.id !in dueAssessmentIDs &&
-        it.semesterID in liveSemesterIDs && it.courseID in liveCourseIDs }.sortedWith(compareBy({ it.dueDate }, { it.id })).map { item ->
+    val liveCourses = snapshot.courses.filter { !it.archived }.associateBy { it.id }
+    val futureAssessments = snapshot.assessments.filter { it.pending && it.id !in dueAssessmentIDs && it.id !in facts.unresolvedAssessmentIDs &&
+        it.semesterID in liveSemesterIDs && liveCourses[it.courseID]?.semesterID == it.semesterID }.sortedWith(compareBy({ it.dueDate }, { it.id })).map { item ->
         val zone = snapshot.semesters.firstOrNull { it.id == item.semesterID }?.timeZoneIdentifier
         TodayWork("assessment/${item.id}", item.title, copy.t("Assessment", "Prüfung / Abgabe", "Evaluación"),
             deadline(item.dueDate, item.dueTime, zone, copy, unknownTime = true), item.dueDate)
@@ -99,8 +99,10 @@ internal fun TodayScreen(
                         else copy.t("Your work", "Deine Aufgaben", "Tus tareas"), style = MaterialTheme.typography.titleLarge)
                     Text(if (dueCount > 0) copy.quantity(dueCount, "deadline due today or earlier", "deadlines due today or earlier",
                         "Frist heute oder früher", "Fristen heute oder früher", "plazo para hoy o antes", "plazos para hoy o antes")
+                    else if (facts.unresolvedDeadlineCount > 0) copy.t("No resolved deadlines due today or earlier.", "Keine eindeutig datierten Fristen für heute oder früher.", "No hay plazos con fecha y hora resueltas para hoy o antes.")
                     else copy.t("No open deadlines due today or earlier.", "Keine offenen Fristen für heute oder früher.", "No hay plazos abiertos para hoy o antes."),
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (facts.unresolvedDeadlineCount > 0) TimingCoverage(facts.unresolvedDeadlineCount, copy, "today.timing.coverage")
                     if (preview.isEmpty()) Text(copy.t("Add or review work in Planner.", "Aufgaben im Planer hinzufügen oder prüfen.", "Añade o revisa tareas en el Planificador."))
                     preview.forEachIndexed { index, item ->
                         if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -210,8 +212,13 @@ internal fun ReportScreen(
                 SectionHeading(copy.t("Due today or earlier", "Heute oder früher fällig", "Para hoy o antes"))
             }
             if (tasks.isEmpty() && assessments.isEmpty()) item(key = "report.deadlines.empty", contentType = "empty") {
-                QuietEmpty(copy.t("No open deadlines are listed for today or earlier.", "Keine offenen Fristen für heute oder früher aufgeführt.",
+                QuietEmpty(if (plan.unresolvedDeadlineCount > 0) copy.t("No resolved deadlines are listed for today or earlier.",
+                    "Keine eindeutig datierten Fristen für heute oder früher aufgeführt.", "No se muestran plazos con fecha y hora resueltas para hoy o antes.")
+                else copy.t("No open deadlines are listed for today or earlier.", "Keine offenen Fristen für heute oder früher aufgeführt.",
                     "No se muestran plazos abiertos para hoy o antes."))
+            }
+            if (plan.unresolvedDeadlineCount > 0) item(key = "report.timing.coverage", contentType = "coverage") {
+                TimingCoverage(plan.unresolvedDeadlineCount, copy, "report.timing.coverage")
             }
             items(shownTasks, key = { "morning-task-${it.id}" }, contentType = { "work" }) { task ->
                 RecordRow(task.title, taskDeadline(task, copy), taskKind(task, copy), Modifier.testTag("report.task.${task.id}"))
@@ -345,7 +352,18 @@ private fun ShowAll(shown: Int, total: Int, copy: UiCopy, tag: String, onClick: 
     }
 }
 
-private fun taskKind(task: WorkTask, copy: UiCopy): String = if (task.sourceAssessmentID != null) copy.t("Preparation", "Vorbereitung", "Preparación")
+@Composable
+private fun TimingCoverage(count: Int, copy: UiCopy, tag: String) {
+    Text(copy.quantity(count, "source deadline needs date or time review.", "source deadlines need date or time review.",
+        "Quellfrist benötigt eine Datums- oder Zeitprüfung.", "Quellfristen benötigen eine Datums- oder Zeitprüfung.",
+        "plazo de origen requiere revisar su fecha u hora.", "plazos de origen requieren revisar su fecha u hora.") + " " +
+        copy.t("Saved records are unchanged and are omitted from time-based suggestions.",
+            "Gespeicherte Einträge bleiben unverändert und werden in zeitbasierten Vorschlägen ausgelassen.",
+            "Los registros guardados no cambian y se omiten de las sugerencias basadas en el tiempo."),
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag(tag))
+}
+
+private fun taskKind(task: WorkTask, copy: UiCopy): String = if (task.isPreparation) copy.t("Preparation", "Vorbereitung", "Preparación")
     else if (task.kind == "assignment") copy.t("Assignment", "Abgabe", "Entrega") else copy.t("Task", "Aufgabe", "Tarea")
 private fun taskDeadline(task: WorkTask, copy: UiCopy): String = deadline(task.dueDate, task.dueTime, task.sourceZone, copy)
 private fun deadline(date: String?, time: String?, zone: String?, copy: UiCopy, unknownTime: Boolean = false): String = listOfNotNull(

@@ -174,4 +174,52 @@ class WidgetProjectionTest {
         assertTrue(WidgetCopy("en").habitSummary(0, 2).contains("recorded"))
         assertFalse(WidgetCopy("en").habitSummary(0, 2).contains("missed"))
     }
+
+    @Test fun unresolvedAcademicClocksSkipOnlyTheirRowsAndNeverInventRecovery() {
+        for (date in listOf("2026-03-29", "2026-10-25")) {
+            val day = LocalDate.parse(date)
+            val semester = AcademicSemester("semester", "Autumn", null, 14, zone.id)
+            val course = AcademicCourse("course", semester.id, "Statistics")
+            val bad = AcademicAssessment("bad", semester.id, course.id, "Unresolved exam", "exam", date, "02:30")
+            val valid = bad.copy(id = "valid", title = "Valid exam", dueTime = "10:00")
+            val routine = habit.copy(weekdays = listOf(day.dayOfWeek.value))
+            val state = WorkspaceState(WorkspaceSnapshot(semesters = listOf(semester), courses = listOf(course),
+                assessments = listOf(bad, valid), tasks = listOf(WorkTask(id = "work", title = "Date-only work", dueDate = date)),
+                habits = listOf(routine), habitLogs = listOf(HabitLog(routine.id, date))))
+            val moment = Instant.parse("${date}T08:00:00Z")
+            val next = WidgetProjection.nextUp(state, moment, zone)
+            assertEquals(setOf("valid", "work"), next.entries.map { it.id }.toSet())
+            assertEquals(2, next.totalCount)
+            assertEquals(1, next.unresolvedCount)
+            assertFalse(next.recoveryRequired)
+            assertTrue(next.entries.none { it.time == "03:30" || it.id == "bad" })
+            assertEquals("02:30", state.snapshot.assessments.first().dueTime)
+            val habits = WidgetProjection.habitsToday(state, moment, zone)
+            assertEquals(1, habits.scheduledCount)
+            assertEquals(1, habits.completedCount)
+            assertFalse(habits.recoveryRequired)
+            val onlyBad = WidgetProjection.nextUp(state.copy(snapshot = state.snapshot.copy(tasks = emptyList(), assessments = listOf(bad))), moment, zone)
+            assertEquals(0, onlyBad.totalCount)
+            assertEquals(1, onlyBad.unresolvedCount)
+            assertFalse(onlyBad.recoveryRequired)
+        }
+    }
+
+    @Test fun dismissedExamsLeaveQueueWhileWeekPreparationKeepsItsOwnState() {
+        val semester = AcademicSemester("semester", "Autumn", null, 14, zone.id)
+        val course = AcademicCourse("course", semester.id, "Statistics")
+        val exam = AcademicAssessment("exam", semester.id, course.id, "Dismissed exam", "exam", monday.toString(), dismissed = true)
+        val preparation = WorkTask(id = "prep", title = "Week preparation", kind = "assignment", dueDate = monday.toString(),
+            sourceCourseID = course.id, sourceWeek = 3)
+        val state = WorkspaceState(WorkspaceSnapshot(semesters = listOf(semester), courses = listOf(course),
+            assessments = listOf(exam), tasks = listOf(preparation)))
+        val next = WidgetProjection.nextUp(state, now, zone)
+        assertEquals(listOf("prep"), next.entries.map { it.id })
+        assertEquals(WidgetEntryKind.PREPARATION, next.entries.single().kind)
+        assertEquals(0, next.unresolvedCount)
+        for ((language, expected) in listOf("en" to "Preparation", "de" to "Vorbereitung", "es" to "Preparación")) {
+            assertTrue(WidgetCopy(language).whenText(next.entries.single()).contains(expected))
+        }
+        assertEquals(0, WidgetProjection.nextUp(state.copy(snapshot = state.snapshot.copy(tasks = listOf(preparation.copy(completed = true)))), now, zone).totalCount)
+    }
 }

@@ -10,8 +10,10 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -84,7 +86,10 @@ class HabitsWorkflowTest {
         assertEquals(1, repository.state.value.snapshot.assessments.count { !it.archived })
         assertFalse(repository.state.value.snapshot.assessments.single().completed)
         compose.onNodeWithTag("assistant.plan.close").performClick()
+        compose.onNodeWithTag("semester.button.assessments").performClick()
+        compose.onNodeWithTag("semester.assessments.list").performScrollToNode(hasTestTag("semester.assessment.${fixture.assessments.single().id}"))
         compose.onNodeWithTag("semester.assessment.${fixture.assessments.single().id}").assertExists()
+        compose.onNodeWithText("Close").performClick()
         compose.onNodeWithTag("planner.mode.work").performClick()
         compose.onNodeWithTag("planner.screen").performScrollToNode(hasTestTag("planner.task.${fixture.preparationTasks.single().id}"))
         compose.onNodeWithTag("planner.task.${fixture.preparationTasks.single().id}").assertIsDisplayed()
@@ -191,7 +196,12 @@ class HabitsWorkflowTest {
     private fun openAssistant() {
         compose.onNodeWithTag("nav.planner").performClick()
         compose.onNodeWithTag("planner.mode.semester").performClick()
-        compose.onNodeWithTag("semester.button.assistant").performClick()
+        compose.onNodeWithTag("semester.board.scroll").performScrollToIndex(0)
+        if (compose.onAllNodesWithTag("semester.button.tools").fetchSemanticsNodes().isNotEmpty()) {
+            if (compose.onAllNodesWithTag("semester.button.examPlan").fetchSemanticsNodes().isEmpty()) compose.onNodeWithTag("semester.button.tools").assertIsDisplayed().performClick()
+        } else compose.onNodeWithTag("semester.board.scroll").performScrollToNode(hasTestTag("semester.button.examPlan"))
+        compose.onNodeWithTag("semester.button.examPlan").assertIsDisplayed()
+        compose.onNodeWithTag("semester.button.examPlan").performClick()
     }
 
     private fun pasteAndReview() {

@@ -8,6 +8,8 @@ import ch.habits.android.calendar.CalendarState
 import ch.habits.android.data.AcademicAssessment
 import ch.habits.android.data.AcademicCourse
 import ch.habits.android.data.AcademicSemester
+import ch.habits.android.data.AcademicStatus
+import ch.habits.android.data.AcademicWeekEntry
 import ch.habits.android.data.Appointment
 import ch.habits.android.data.Habit
 import ch.habits.android.data.HabitLog
@@ -227,6 +229,49 @@ ws ::= [ \t\n\r]{0,8}
             assertTrue(set.coverage.any { it.contains("unresolved") })
             assertFalse(set.userPrompt.contains("03:30"))
         }
+    }
+
+    @Test fun unresolvedOrDismissedExamsLeaveValidFactsAndHabitsAvailable() {
+        for (rawDate in listOf("2026-03-29", "2026-10-25")) {
+            val date = LocalDate.parse(rawDate)
+            val original = academic(rawDate, "02:30")
+            val bad = original.assessments.single()
+            val source = original.copy(assessments = listOf(bad, bad.copy(id = "dismissed", title = "Dismissed exam", dismissed = true),
+                bad.copy(id = "valid", title = "Valid exam", dueTime = "10:00")),
+                tasks = listOf(task("work", "Valid civil deadline", due = rawDate)),
+                habits = listOf(Habit("habit", "Sunday habit", weekdays = listOf(date.dayOfWeek.value))))
+            val facts = ReportFacts.build("morning", source, null, date, zurich, "en")
+            assertEquals(setOf("assessment", "task", "habit-plan"), facts.facts.map { it.sourceKind }.toSet())
+            assertTrue(facts.facts.any { (it.sourceRef as? ReportSourceRef.Assessment)?.record?.id == "valid" })
+            assertTrue(facts.coverage.any { it.startsWith("1 source items have unresolved") })
+            assertFalse(facts.userPrompt.contains("Dismissed exam"))
+            assertFalse(facts.userPrompt.contains("02:30"))
+            assertFalse(facts.userPrompt.contains("03:30"))
+            assertEquals("02:30", source.assessments.first().dueTime)
+        }
+    }
+
+    @Test fun weekPreparationAndWeekStatusKeepPlanningSeparateFromRecordedCompletion() {
+        val original = academic().let { it.copy(assessments = it.assessments.map { exam -> exam.copy(dismissed = true) }) }
+        val preparation = task("week", "Review course week").copy(sourceCourseID = "course", sourceWeek = 3)
+        val source = original.copy(tasks = listOf(preparation))
+        val morning = ReportFacts.build("morning", source, null, day, utc, "en")
+        assertEquals("preparation", morning.facts.single().sourceKind)
+        assertTrue(morning.facts.single().text.startsWith("Open preparation"))
+        val boardChanged = source.copy(semesters = source.semesters.map { it.copy(statuses = listOf(AcademicStatus("ready", "Reviewed", "#112233"))) },
+            courses = source.courses.map { it.copy(entries = mapOf(3 to AcademicWeekEntry("ready", "secret-week-note"))) })
+        val changed = ReportFacts.build("morning", boardChanged, null, day, utc, "en")
+        assertEquals(morning.facts, changed.facts)
+        assertEquals(morning.userPrompt, changed.userPrompt)
+        assertNotEquals(morning.fingerprint, changed.fingerprint, "Academic edits still invalidate a captured selection")
+        assertTrue(ReportFacts.build("evening", boardChanged, null, day, utc, "en").facts.isEmpty())
+        val recorded = boardChanged.copy(tasks = listOf(preparation.copy(completed = true, completedAt = "2026-10-08T12:00:00Z")),
+            assessments = source.assessments.map { it.copy(completed = true, completedAt = "2026-10-08T13:00:00Z", archived = true) })
+        val evening = ReportFacts.build("evening", recorded, null, day, utc, "en")
+        assertEquals(setOf("preparation-completion", "assessment-completion"), evening.facts.map { it.sourceKind }.toSet())
+        assertFalse(evening.userPrompt.contains("secret-week-note"))
+        assertFalse(evening.userPrompt.contains("planned 60 min"))
+        assertNotEquals(morning.fingerprint, ReportFacts.build("morning", original, null, day, utc, "en").fingerprint)
     }
 
     @Test fun calendarOffDeniedTruncatedAndUnselectedNeverLeakCachedEventTitles() {

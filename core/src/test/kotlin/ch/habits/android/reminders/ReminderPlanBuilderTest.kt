@@ -58,6 +58,43 @@ class ReminderPlanBuilderTest {
         val timed = snapshot.copy(assessments = snapshot.assessments.map { it.copy(dueTime = "10:00") })
         assertEquals(Instant.parse("2026-10-07T07:30:00Z"), ReminderPlanBuilder.build(timed, prefs, now, zone).single().instant)
     }
+
+    @Test fun dismissalInvalidatesAssessmentTokenWithoutCompletingItsPreparation() {
+        val original = academic()
+        val prefs = ReminderPreferences(assessmentsEnabled = true, tasksEnabled = true, includePreparation = true)
+        val plan = ReminderPlanBuilder.build(original, prefs, now, zone).single()
+        val dismissed = original.copy(assessments = original.assessments.map { it.copy(dismissed = true) },
+            tasks = listOf(task().copy(sourceAssessmentID = "exam")))
+        assertNull(ReminderPlanBuilder.current(dismissed, prefs, plan.token, plan.instant, zone))
+        assertEquals(listOf(dismissed.tasks.single().id), ReminderPlanBuilder.build(dismissed, prefs, now, zone).map { it.sourceID })
+        assertFalse(dismissed.tasks.single().completed)
+    }
+
+    @Test fun courseWeekPreparationUsesPreparationOptOutAndIndependentCompletion() {
+        val source = academic().copy(tasks = listOf(task().copy(sourceCourseID = "course", sourceWeek = 3)))
+        assertTrue(ReminderPlanBuilder.build(source, ReminderPreferences(tasksEnabled = true), now, zone).isEmpty())
+        val prefs = ReminderPreferences(tasksEnabled = true, includePreparation = true)
+        val dismissed = source.copy(assessments = source.assessments.map { it.copy(dismissed = true) })
+        assertEquals(source.tasks.single().id, ReminderPlanBuilder.build(dismissed, prefs, now, zone).single().sourceID)
+        assertTrue(ReminderPlanBuilder.build(dismissed.copy(tasks = source.tasks.map { it.copy(completed = true) }), prefs, now, zone).isEmpty())
+    }
+
+    @Test fun unresolvedSourceAssessmentTimesDoNotPoisonNeighboringReminders() {
+        val prefs = ReminderPreferences(assessmentsEnabled = true, tasksEnabled = true, habitsEnabled = true)
+        for (date in listOf("2026-03-29", "2026-10-25")) {
+            val parent = academic()
+            val bad = parent.assessments.single().copy(dueDate = date, dueTime = "02:30")
+            val good = bad.copy(id = "valid", title = "Valid exam", dueTime = "10:00")
+            val work = task().copy(dueDate = date, sourceZone = "Europe/Zurich")
+            val source = parent.copy(assessments = listOf(bad, good), tasks = listOf(work), habits = listOf(Habit(id = "habit", title = "Read")))
+            val plans = ReminderPlanBuilder.build(source, prefs, Instant.parse("${date}T00:00:00Z"), zone)
+            assertTrue(plans.none { it.sourceID == bad.id })
+            assertTrue(plans.any { it.sourceID == good.id })
+            assertTrue(plans.any { it.sourceID == work.id })
+            assertTrue(plans.any { it.kind == ReminderKind.HABIT })
+            assertEquals("02:30", source.assessments.first().dueTime)
+        }
+    }
     @Test fun appointmentLeadAndQuietHoursNeverInventAUsefulLateReminder() {
         val early = Appointment(title = "Morning", startDate = "2026-10-07", startTime = "07:15", endDate = "2026-10-07", endTime = "08:00", timeZoneIdentifier = "UTC")
         val night = early.copy(id = "night", title = "Night", startTime = "03:00", endTime = "04:00")

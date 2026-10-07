@@ -33,15 +33,15 @@ import java.time.format.TextStyle
 
 @Composable
 internal fun TaskEditor(initial: WorkTask?, copy: UiCopy, busy: Boolean,
-    onSave: (WorkTask) -> Unit, onArchive: ((WorkTask) -> Unit)?) {
-    val original = remember(initial) { initial ?: WorkTask(title = "") }
+    onSave: (WorkTask) -> Unit, onArchive: ((WorkTask) -> Unit)?, initialDraft: WorkTask? = null) {
+    val original = remember(initial, initialDraft) { initial ?: initialDraft ?: WorkTask(title = "") }
     var title by remember(original.id) { mutableStateOf(original.title) }
     var notes by remember(original.id) { mutableStateOf(original.notes) }
     var date by remember(original.id) { mutableStateOf(original.dueDate.orEmpty()) }
     var time by remember(original.id) { mutableStateOf(original.dueTime.orEmpty()) }
     var zone by remember(original.id) { mutableStateOf(original.sourceZone ?: ZoneId.systemDefault().id) }
     var kind by remember(original.id) { mutableStateOf(original.kind) }
-    var minutes by remember(original.id) { mutableStateOf(initial?.minutes?.takeIf { it > 0 }?.toString().orEmpty()) }
+    var minutes by remember(original.id) { mutableStateOf((initial?.minutes ?: initialDraft?.minutes)?.takeIf { it > 0 }?.toString().orEmpty()) }
     var priority by remember(original.id) { mutableStateOf(original.priority) }
     var reviewed by remember(original.id) { mutableStateOf<WorkTask?>(null) }
     var error by remember(original.id) { mutableStateOf<String?>(null) }

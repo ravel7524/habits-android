@@ -21,6 +21,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.unit.Density
@@ -139,7 +140,7 @@ class UiReviewCaptureTest {
         capture("empty-today", "today.screen", "today.openPlanner")
         planner("work"); capture("empty-work", "planner.mode.work", "planner.add.task")
         planner("schedule"); capture("empty-schedule", "planner.mode.schedule", "planner.add.appointment")
-        planner("semester"); reveal("planner.screen", "semester.empty"); capture("empty-semester", "semester.empty")
+        planner("semester"); reveal("semester.board.scroll", "semester.empty"); capture("empty-semester", "semester.empty")
         compose.onNodeWithTag("nav.habits").performClick(); capture("empty-habits", "habits.screen", "habits.add")
 
         seedRecordedWorkspace()
@@ -151,7 +152,10 @@ class UiReviewCaptureTest {
         compose.onNodeWithTag("planner.screen").performScrollToNode(hasTestTag("planner.task.${id(6)}"))
         capture("populated-work-completed", "planner.task.${id(6)}")
         planner("schedule"); reveal("planner.screen", "planner.appointment.$appointmentID"); capture("populated-schedule-records", "planner.appointment.$appointmentID")
-        planner("semester"); reveal("planner.screen", "semester.assessment.${id(13)}"); capture("populated-semester-assessments", "semester.assessment.${id(13)}")
+        planner("semester"); reveal("semester.board.scroll", "semester.button.assessments")
+        compose.onNodeWithTag("semester.button.assessments").performClick()
+        reveal("semester.assessments.list", "semester.assessment.${id(13)}"); capture("populated-semester-assessments-list", "semester.assessment.${id(13)}")
+        compose.onNodeWithText("Close").performClick()
         compose.onNodeWithTag("nav.habits").performClick(); capture("populated-habits", "habits.screen", "habits.add")
         captureReports()
         captureSettings()
@@ -221,13 +225,13 @@ class UiReviewCaptureTest {
     }
 
     private fun captureAssistant() {
-        planner("semester"); compose.onNodeWithTag("semester.button.assistant").performClick()
+        openLegacyAssistant()
         capture("assistant-entry", "assistant.plan.screen")
         reveal("assistant.plan.screen", "desktop.section")
         compose.onNodeWithText("Connect Codex or Claude").performClick()
         reveal("assistant.plan.screen", "desktop.invitation"); capture("assistant-desktop-unpaired", "desktop.invitation")
         compose.onNodeWithTag("assistant.plan.close").performClick()
-        planner("semester"); compose.onNodeWithTag("semester.button.assistant").performClick()
+        openLegacyAssistant()
         val proposal = plan(30, "Exam preparation", "Corporate Finance", "Corporate Finance exam")
         val before = repository.state.value.snapshot
         reveal("assistant.plan.screen", "assistant.plan.input")
@@ -241,7 +245,7 @@ class UiReviewCaptureTest {
         compose.waitUntil(10_000) { repository.state.value.snapshot.receipts.any { it.proposalID == proposal.proposalID && it.state == ReceiptState.APPLIED } }
         reveal("assistant.plan.screen", "assistant.plan.receipt"); capture("assistant-receipt-applied", "assistant.plan.receipt")
         compose.onNodeWithTag("assistant.plan.close").performClick()
-        planner("semester"); compose.onNodeWithTag("semester.button.assistant").performClick()
+        openLegacyAssistant()
         val errorBaseline = repository.state.value.snapshot
         reveal("assistant.plan.screen", "assistant.plan.input"); compose.onNodeWithTag("assistant.plan.input").performTextInput("{ not a proposal }")
         reveal("assistant.plan.screen", "assistant.plan.review"); compose.onNodeWithTag("assistant.plan.review").performClick()
@@ -320,6 +324,15 @@ class UiReviewCaptureTest {
         compose.onNodeWithTag("nav.planner").performClick()
         reveal("planner.screen", "planner.mode.$mode"); compose.onNodeWithTag("planner.mode.$mode").performClick()
         compose.onNodeWithTag("planner.mode.$mode").assertIsSelected()
+    }
+    private fun openLegacyAssistant() {
+        planner("semester")
+        compose.onNodeWithTag("semester.board.scroll").performScrollToIndex(0)
+        if (compose.onAllNodesWithTag("semester.button.tools").fetchSemanticsNodes().isNotEmpty()) {
+            if (compose.onAllNodesWithTag("semester.button.examPlan").fetchSemanticsNodes().isEmpty()) compose.onNodeWithTag("semester.button.tools").assertIsDisplayed().performClick()
+        } else reveal("semester.board.scroll", "semester.button.examPlan")
+        compose.onNodeWithTag("semester.button.examPlan").assertIsDisplayed()
+        compose.onNodeWithTag("semester.button.examPlan").performClick()
     }
     private fun openReport(kind: String) {
         compose.onNodeWithTag("nav.today").performClick()

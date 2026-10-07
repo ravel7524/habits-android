@@ -4,8 +4,6 @@ import ch.habits.android.core.AcademicPlanValidator
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -17,7 +15,17 @@ data class TodayFacts(
     val habits: List<Habit>,
     val completedHabitIDs: Set<String>,
     val assessments: List<AcademicAssessment>,
-)
+    val unresolvedTaskIDs: Set<String> = emptySet(),
+    val unresolvedAssessmentIDs: Set<String> = emptySet(),
+) {
+    val unresolvedDeadlineCount: Int get() = unresolvedTaskIDs.size + unresolvedAssessmentIDs.size
+}
+
+/** An explicit civil clock must resolve uniquely; never choose a DST fold or shift a gap. */
+object SourceClockResolution {
+    fun instant(date: String, time: String, zone: String): Instant? =
+        runCatching { AcademicPlanValidator.resolveInstant(date, time, zone) }.getOrNull()
+}
 
 data class RecordedReportFacts(
     val completedTasks: List<WorkTask>,
@@ -31,10 +39,17 @@ object WorkspaceFacts {
     fun today(snapshot: WorkspaceSnapshot, date: LocalDate = LocalDate.now(), zone: ZoneId = ZoneId.systemDefault()): TodayFacts {
         val start = date.atStartOfDay(zone).toInstant()
         val end = date.plusDays(1).atStartOfDay(zone).toInstant()
+        val unresolvedTasks = mutableSetOf<String>()
+        val unresolvedAssessments = mutableSetOf<String>()
+        fun due(id: String, day: String, time: String?, sourceZone: String, unresolved: MutableSet<String>): Boolean {
+            if (time == null) return runCatching { LocalDate.parse(day) <= date }.getOrElse { unresolved += id; false }
+            val instant = SourceClockResolution.instant(day, time, sourceZone)
+            if (instant == null) { unresolved += id; return false }
+            return instant < end
+        }
         val tasks = snapshot.tasks.filter { item ->
             !item.archived && !item.completed && item.dueDate?.let { day ->
-                if (item.dueTime == null) LocalDate.parse(day) <= date
-                else AcademicPlanValidator.resolveInstant(day, item.dueTime, item.sourceZone ?: zone.id) < end
+                due(item.id, day, item.dueTime, item.sourceZone ?: zone.id, unresolvedTasks)
             } == true
         }.sortedWith(compareBy<WorkTask> { it.dueDate }.thenBy { it.dueTime ?: "" }.thenBy { it.id })
         val appointments = snapshot.appointments.filter { item ->
@@ -44,16 +59,15 @@ object WorkspaceFacts {
         val habits = snapshot.habits.filter { !it.archived && date.dayOfWeek.value in it.weekdays }
         val completedHabitIDs = snapshot.habitLogs.filter { it.date == date.toString() && it.completed }.map { it.habitID }.toSet()
         val assessments = snapshot.assessments.filter { item ->
-            if (item.archived || item.completed) false else {
+            if (!item.pending) false else {
                 val semester = snapshot.semesters.find { it.id == item.semesterID && !it.archived }
                 val course = snapshot.courses.find { it.id == item.courseID && !it.archived }
-                semester != null && course != null && if (item.dueTime == null) {
-                    // Preserve the recorded civil day and show source timezone in the UI.
-                    LocalDate.parse(item.dueDate) <= date
-                } else AcademicPlanValidator.resolveInstant(item.dueDate, item.dueTime, semester.timeZoneIdentifier) < end
+                semester != null && course?.semesterID == semester.id &&
+                    due(item.id, item.dueDate, item.dueTime, semester.timeZoneIdentifier, unresolvedAssessments)
             }
         }.sortedWith(compareBy<AcademicAssessment> { it.dueDate }.thenBy { it.dueTime ?: "" }.thenBy { it.id })
-        return TodayFacts(date, tasks, appointments, habits, completedHabitIDs, assessments)
+        return TodayFacts(date, tasks, appointments, habits, completedHabitIDs, assessments,
+            unresolvedTasks.toSet(), unresolvedAssessments.toSet())
     }
 
     fun report(snapshot: WorkspaceSnapshot, start: LocalDate, endExclusive: LocalDate,
@@ -95,7 +109,7 @@ object AssistantContextExporter {
             put("semesters", JsonArray(listOf(buildJsonObject {
                 put("id", semester.id)
                 put("title", semester.title)
-                put("startDate", semester.startDate)
+                semester.startDate?.let { put("startDate", it) }
                 put("weekCount", semester.weekCount)
                 put("timeZoneIdentifier", semester.timeZoneIdentifier)
                 put("courses", JsonArray(courses.map { course -> buildJsonObject {
@@ -110,7 +124,7 @@ object AssistantContextExporter {
                     put("dueDate", item.dueDate)
                     item.dueTime?.let { put("dueTime", it) }
                     put("notes", if (includeNotes) item.notes else "")
-                    put("state", if (item.completed) "completed" else "pending")
+                    put("state", item.recordedState)
                 } }))
             })))
         }.toString()
@@ -131,9 +145,31 @@ object AssistantContextExporter {
         val preparation = snapshot.tasks.filter { it.sourceAssessmentID in assessmentIDs }.map {
             if (includeNotes) it else it.copy(notes = "")
         }
-        val context = WorkspaceRepository.workspaceJson.encodeToString(AssistantAcademicContext(
-            semesters = semesters, courses = courses, assessments = assessments, preparationTasks = preparation,
-            notesIncluded = includeNotes))
+        // Explicit v1 allowlist: expanded board/week/compatibility metadata must
+        // not cross the old consent boundary through model serialization.
+        val context = buildJsonObject {
+            put("format", "habits.academic-context"); put("version", 1); put("notesIncluded", includeNotes)
+            put("semesters", JsonArray(semesters.map { item -> buildJsonObject {
+                put("id", item.id); put("title", item.title); item.startDate?.let { put("startDate", it) }
+                put("weekCount", item.weekCount); put("timeZoneIdentifier", item.timeZoneIdentifier); put("archived", item.archived)
+            } }))
+            put("courses", JsonArray(courses.map { item -> buildJsonObject {
+                put("id", item.id); put("semesterID", item.semesterID); put("name", item.name); put("archived", item.archived)
+            } }))
+            put("assessments", JsonArray(assessments.map { item -> buildJsonObject {
+                put("id", item.id); put("semesterID", item.semesterID); put("courseID", item.courseID); put("title", item.title)
+                put("kind", item.kind); put("dueDate", item.dueDate); item.dueTime?.let { put("dueTime", it) }
+                put("notes", item.notes); put("completed", item.completed); item.completedAt?.let { put("completedAt", it) }
+                put("archived", item.archived); put("state", item.recordedState)
+            } }))
+            put("preparationTasks", JsonArray(preparation.map { item -> buildJsonObject {
+                put("id", item.id); put("title", item.title); put("kind", item.kind); put("notes", item.notes)
+                item.dueDate?.let { put("dueDate", it) }; item.dueTime?.let { put("dueTime", it) }; item.sourceZone?.let { put("sourceZone", it) }
+                put("priority", item.priority); put("minutes", item.minutes); put("completed", item.completed)
+                item.completedAt?.let { put("completedAt", it) }; put("archived", item.archived)
+                item.sourceAssessmentID?.let { put("sourceAssessmentID", it) }; put("createdAt", item.createdAt); put("updatedAt", item.updatedAt)
+            } }))
+        }.toString()
         return """
             Create a reviewable academic proposal JSON file for Habits. I will preview and import it myself.
             Use format "habits.academic-plan", version 1, and a fresh globally unique proposalID UUID. Keep IDs stable on retries.
@@ -153,14 +189,3 @@ object AssistantContextExporter {
         """.trimIndent()
     }
 }
-
-@Serializable
-private data class AssistantAcademicContext(
-    val format: String = "habits.academic-context",
-    val version: Int = 1,
-    val notesIncluded: Boolean,
-    val semesters: List<AcademicSemester>,
-    val courses: List<AcademicCourse>,
-    val assessments: List<AcademicAssessment>,
-    val preparationTasks: List<WorkTask>,
-)

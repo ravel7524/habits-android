@@ -1,0 +1,13 @@
+# Semester Board verification patterns
+
+These checks address gaps observed during the 0.5 implementation. They supplement the existing [native debugger workflow](native-android-debugging.md), not a separate orchestration framework.
+
+- Freeze both app and instrumentation sources before assembling either APK. Record both SHA-256 values and actual runner class/method counts; source enumeration is not evidence that the compiled test APK contains the latest method. Preserve failed artifacts and never relabel a stale APK as current coverage.
+- Freeze text/selection/timezone on the UI thread before background decoding. Do not pass live Compose MutableState delegates into parser jobs. Claim busy state before dispatch, retain drafts on failure, and expose an immediate truthful state description/live region. Runtime failures need the observed state and safe diagnostic before Activity teardown; a timeout alone does not identify a codec or UI cause.
+- Validate assistant partial updates against the merged source: effective zone, resolved completion state, preserved scoped IDs and occurrence metadata. Strict new-source rules apply to new/changed timings, while unchanged raw iOS ambiguous clocks remain literal historical facts. Test omitted versus explicit zone and valid neighboring work/habits.
+- Original-version byte preservation covers both normal load/edit and missing/corrupt-primary recovery. Restore from a validated schema-1 rolling backup, perform later mutations, and compare the dedicated original-version backup byte-for-byte. A decoded schema-2 object is not the original file.
+- Status arrays have user-defined order. Test reversed incoming order with omitted old definitions, export/menu order and guarded Undo. A consumed receipt cannot substitute for applying the actual reviewed order.
+- Keep source fact/UI tests separate from provider/transport acceptance: test-host screenshots, actual MainActivity, pinned-TLS delivery/receipts, native inference and physical devices have different evidence. Every runtime acceptance starts under native LLDB before JDWP resume. No skipped model/capture test counts as inference or visual proof.
+- Check the live app PID and nonzero TracerPid for each accepted actual screenshot, not only at startup. An official lldb-server crash can leave the app stopped and untraced without a Java fatal. Preserve server/crash/process diagnostics, stop the invalid session and recapture after reattachment. Use each final recapture's timestamp/build/PID metadata; an older directory-level scope file does not override it.
+
+Retain all failed/partial runs with exact hashes. Independent Board review must meet the user's 8.5 minimum on accepted captured states; earlier 0.4 scores do not score the new screens.

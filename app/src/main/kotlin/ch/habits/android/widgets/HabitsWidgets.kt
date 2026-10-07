@@ -91,11 +91,21 @@ internal object HabitsWidgetViews {
         val limit = rowLimit(context, options)
         val projection = runCatching { WidgetProjection.nextUp(state, now, zone, limit) }
             .getOrElse { NextUpProjection(emptyList(), 0, now, true) }
-        val views = base(context, state, widgetID, HabitsWidgets.NEXT_UP, "planner", copy.nextUp, now, zone, limit)
+        val route = if (projection.unresolvedCount > 0 && projection.totalCount == 0) "semester" else "planner"
+        val views = base(context, state, widgetID, HabitsWidgets.NEXT_UP, route, copy.nextUp, now, zone, limit)
         if (projection.recoveryRequired) recovery(views, copy, limit)
-        else if (projection.totalCount == 0) empty(views, copy.emptyNext, limit)
+        else if (projection.totalCount == 0) {
+            if (projection.unresolvedCount == 0) empty(views, copy.emptyNext, limit)
+            else {
+                views.setTextViewText(R.id.habits_widget_summary, copy.unresolvedSummary(projection.unresolvedCount))
+                views.setTextViewText(R.id.habits_widget_empty, copy.unresolvedDetail)
+                views.setViewVisibility(R.id.habits_widget_empty, if (limit == 0) View.GONE else View.VISIBLE)
+            }
+        }
         else {
-            views.setTextViewText(R.id.habits_widget_summary, copy.nextSummary(projection.entries.size, projection.totalCount))
+            val summary = copy.nextSummary(projection.entries.size, projection.totalCount) +
+                if (projection.unresolvedCount > 0) " · " + copy.unresolvedSummary(projection.unresolvedCount) else ""
+            views.setTextViewText(R.id.habits_widget_summary, summary)
             views.setViewVisibility(R.id.habits_widget_empty, View.GONE)
             projection.entries.forEachIndexed { index, item ->
                 views.setViewVisibility(rows[index], View.VISIBLE)

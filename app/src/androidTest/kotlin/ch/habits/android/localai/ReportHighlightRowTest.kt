@@ -102,4 +102,40 @@ class ReportHighlightRowTest {
         assertEquals(appointment.title, appointmentDisplay.title)
         assertTrue(appointmentDisplay.details.contains("Saved appointment"))
     }
+
+    @Test fun dismissedOrUnresolvedOpenAssessmentReferencesFailClosedWhileRecordedCompletionSurvives() {
+        val semester = AcademicSemester("semester", "Semester", null, 14, "Europe/Zurich")
+        val course = AcademicCourse("course", semester.id, "Statistics")
+        val assessment = AcademicAssessment("exam", semester.id, course.id, "Exam", "exam", day.toString(), "10:00")
+        val source = WorkspaceSnapshot(semesters = listOf(semester), courses = listOf(course), assessments = listOf(assessment))
+        val fact = ReportFacts.build("morning", source, null, day, utc, "en").facts.single()
+        val dismissed = assessment.copy(dismissed = true)
+        assertNull(resolveReportHighlight(fact, source.copy(assessments = listOf(dismissed)), null, "en", utc))
+        assertNull(resolveReportHighlight(fact.copy(sourceRef = ReportSourceRef.Assessment(dismissed, course, semester, completion = false)),
+            source.copy(assessments = listOf(dismissed)), null, "en", utc))
+        for (date in listOf("2026-03-29", "2026-10-25")) {
+            val unresolved = assessment.copy(dueDate = date, dueTime = "02:30")
+            assertNull(resolveReportHighlight(fact.copy(sourceRef = ReportSourceRef.Assessment(unresolved, course, semester, completion = false)),
+                source.copy(assessments = listOf(unresolved)), null, "en", utc))
+        }
+        val completed = dismissed.copy(completed = true, completedAt = "2026-10-08T12:00:00Z", archived = true)
+        val history = source.copy(assessments = listOf(completed))
+        val recorded = ReportFacts.build("evening", history, null, day, utc, "en").facts.single()
+        assertNotNull(resolveReportHighlight(recorded, history, null, "en", utc))
+    }
+
+    @Test fun courseWeekPreparationUsesOwnTypedRecordAndCompletionEvidence() {
+        val record = task("Week preparation").copy(sourceCourseID = "course", sourceWeek = 3)
+        val source = WorkspaceSnapshot(tasks = listOf(record))
+        val fact = ReportFacts.build("morning", source, null, day, utc, "en").facts.single()
+        val display = requireNotNull(resolveReportHighlight(fact, source, null, "en", utc))
+        assertTrue(display.details.any { it.startsWith("Preparation") })
+        assertNull(resolveReportHighlight(fact, source.copy(tasks = listOf(record.copy(sourceWeek = 4))), null, "en", utc))
+        val completed = record.copy(completed = true, completedAt = "2026-10-08T12:00:00Z", minutes = 900)
+        val history = source.copy(tasks = listOf(completed))
+        val recorded = ReportFacts.build("evening", history, null, day, utc, "en").facts.single()
+        val evidence = requireNotNull(resolveReportHighlight(recorded, history, null, "en", utc))
+        assertTrue(evidence.details.any { it.contains("Preparation") && it.contains("Completion recorded") })
+        assertFalse(evidence.details.any { it.contains("900") || it.contains("studied") })
+    }
 }

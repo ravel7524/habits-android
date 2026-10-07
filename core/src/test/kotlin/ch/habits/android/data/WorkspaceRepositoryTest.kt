@@ -241,7 +241,7 @@ class WorkspaceRepositoryTest {
     } }
 
     @Test fun unsupportedSchemaAndIncompleteJsonArePreserved() = runBlocking { fixture { _, file ->
-        val unsupported = WorkspaceRepository.workspaceJson.encodeToString(WorkspaceSnapshot(schemaVersion = 2)).toByteArray()
+        val unsupported = WorkspaceRepository.workspaceJson.encodeToString(WorkspaceSnapshot(schemaVersion = 3)).toByteArray()
         file.writeBytes(unsupported)
         val future = WorkspaceRepository(file)
         assertTrue(future.state.value.recoveryRequired)

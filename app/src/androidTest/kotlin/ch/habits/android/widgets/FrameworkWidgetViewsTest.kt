@@ -15,6 +15,9 @@ import android.widget.RemoteViews
 import android.widget.TextView
 import androidx.test.platform.app.InstrumentationRegistry
 import ch.habits.android.R
+import ch.habits.android.data.AcademicAssessment
+import ch.habits.android.data.AcademicCourse
+import ch.habits.android.data.AcademicSemester
 import ch.habits.android.data.Habit
 import ch.habits.android.data.HabitLog
 import ch.habits.android.data.Preferences
@@ -158,6 +161,29 @@ class FrameworkWidgetViewsTest {
         val small = inflate(HabitsWidgetViews.nextUp(context, state.copy(recoveryRequired = false), nextID, compact, now, zone))
         assertEquals(View.GONE, small.findViewById<View>(R.id.habits_widget_row_1).visibility)
         assertTrue(small.findViewById<TextView>(R.id.habits_widget_summary).text.toString().contains("Open Planner"))
+    }
+
+    @Test fun unresolvedAcademicClockShowsReviewCoverageAlongsideValidRowsInsteadOfRecoveryOrEmpty() {
+        val semester = AcademicSemester("semester", "Autumn", null, 14, zone.id)
+        val course = AcademicCourse("course", semester.id, "Statistics")
+        val exam = AcademicAssessment("exam", semester.id, course.id, "Unresolved exam", "exam", "2026-10-25", "02:30")
+        val state = WorkspaceState(WorkspaceSnapshot(semesters = listOf(semester), courses = listOf(course), assessments = listOf(exam),
+            tasks = listOf(WorkTask(title = "Valid preparation", dueDate = "2026-10-06", sourceCourseID = course.id, sourceWeek = 3)),
+            habits = listOf(Habit(id = "h1", title = "Read")), preferences = Preferences(language = "en")))
+        val mixed = inflate(HabitsWidgetViews.nextUp(context, state, nextID, options, now, zone))
+        assertEquals("Valid preparation", mixed.findViewById<TextView>(R.id.habits_widget_item_title_1).text.toString())
+        assertTrue(mixed.findViewById<TextView>(R.id.habits_widget_item_detail_1).text.toString().contains("Preparation"))
+        assertTrue(mixed.findViewById<TextView>(R.id.habits_widget_summary).text.toString().contains("1 source time needs review"))
+        assertEquals(View.GONE, mixed.findViewById<View>(R.id.habits_widget_empty).visibility)
+        val unresolvedOnly = inflate(HabitsWidgetViews.nextUp(context, state.copy(snapshot = state.snapshot.copy(tasks = emptyList())), nextID, options, now, zone))
+        assertEquals(View.GONE, unresolvedOnly.findViewById<View>(R.id.habits_widget_row_1).visibility)
+        val detail = unresolvedOnly.findViewById<TextView>(R.id.habits_widget_empty).text.toString()
+        assertTrue(detail.contains("clocks were not shifted"))
+        assertFalse(detail.contains("recover"))
+        assertFalse(detail.contains("No pending"))
+        val habits = inflate(HabitsWidgetViews.habits(context, state, habitsID, options, now, zone))
+        assertEquals("Read", habits.findViewById<TextView>(R.id.habits_widget_item_title_1).text.toString())
+        assertEquals("Log", habits.findViewById<Button>(R.id.habits_widget_action_1).text.toString())
     }
 
     private fun inflate(views: RemoteViews): View {

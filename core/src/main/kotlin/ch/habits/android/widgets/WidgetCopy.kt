@@ -14,6 +14,11 @@ class WidgetCopy(language: String, systemLanguage: String = Locale.getDefault().
     val recovery get() = t("Open the app to recover your preserved data.", "Öffne die App, um deine erhaltenen Daten wiederherzustellen.", "Abre la app para recuperar tus datos conservados.")
     val emptyNext get() = t("No pending deadlines or appointments", "Keine offenen Fristen oder Termine", "Sin plazos ni citas pendientes")
     val emptyHabits get() = t("No habits scheduled today", "Heute keine Gewohnheiten geplant", "Sin hábitos programados para hoy")
+    fun unresolvedSummary(count: Int) = if (count == 1) t("1 source time needs review", "1 Quellzeit prüfen", "1 hora de origen requiere revisión")
+        else t("$count source times need review", "$count Quellzeiten prüfen", "$count horas de origen requieren revisión")
+    val unresolvedDetail get() = t("Saved records remain intact. Their clocks were not shifted; review them in the app.",
+        "Gespeicherte Einträge bleiben erhalten. Uhrzeiten wurden nicht verschoben; prüfe sie in der App.",
+        "Los registros guardados se conservan. No se ajustaron sus horas; revísalos en la app.")
     val log get() = t("Log", "Erfassen", "Registrar")
     val undoLog get() = t("Undo log", "Zurück", "Deshacer")
     val logged get() = t("Logged today", "Heute erfasst", "Registrado hoy")
@@ -34,6 +39,7 @@ class WidgetCopy(language: String, systemLanguage: String = Locale.getDefault().
             WidgetEntryKind.ASSIGNMENT -> t("Assignment", "Abgabe", "Entrega")
             WidgetEntryKind.ASSESSMENT -> t("Assessment", "Prüfung/Frist", "Evaluación")
             WidgetEntryKind.APPOINTMENT -> t("Appointment", "Termin", "Cita")
+            WidgetEntryKind.PREPARATION -> t("Preparation", "Vorbereitung", "Preparación")
         }
         return "$state$kind · $day · $clock · $zone"
     }

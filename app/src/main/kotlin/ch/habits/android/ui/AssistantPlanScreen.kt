@@ -24,6 +24,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,6 +63,7 @@ internal fun AssistantPlanScreen(
     semesterID: String?,
     copy: UiCopy,
     desktopSection: @Composable (onPlan: (AcademicPlan) -> Unit) -> Unit,
+    providedPlan: AcademicPlan? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -85,6 +87,13 @@ internal fun AssistantPlanScreen(
                 if (failure is CancellationException) throw failure
                 error = ProposalFailure(action, failure.message)
             } finally { busy = false }
+        }
+    }
+    LaunchedEffect(providedPlan) {
+        if (providedPlan != null) operation(ProposalAction.READ) {
+            text = AcademicPlanCodec.encode(providedPlan)
+            preview = repository.preview(providedPlan)
+            receipt = preview?.receipt
         }
     }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->

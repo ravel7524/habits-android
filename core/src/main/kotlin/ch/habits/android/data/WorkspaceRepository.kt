@@ -4,6 +4,8 @@ import ch.habits.android.core.AcademicPlan
 import ch.habits.android.core.AcademicPlanCodec
 import ch.habits.android.core.AcademicPlanValidator
 import ch.habits.android.core.AcademicRecordIds
+import ch.habits.android.semester.SemesterBoardExport
+import ch.habits.android.semester.SemesterBoardCodec
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.channels.FileChannel
@@ -37,6 +39,8 @@ import kotlinx.serialization.json.jsonObject
 /** One atomic local store contains source records and the import ledger. No network calls. */
 class WorkspaceRepository(private val file: File) {
     val backupFile: File get() = File(file.absolutePath + ".backup")
+    /** Original schema 1 bytes survive subsequent rolling backups after the first deliberate edit. */
+    val schemaV1BackupFile: File get() = File(file.absolutePath + ".schema-v1-backup")
     private val mutex = fileLocks.computeIfAbsent(file.canonicalPath) { Mutex() }
     private var durableBytes: ByteArray? = null
     private val mutableState = MutableStateFlow(loadInitial())
@@ -48,6 +52,93 @@ class WorkspaceRepository(private val file: File) {
     suspend fun preview(plan: AcademicPlan): PlanPreview = locked {
         requireWritable()
         makePreview(plan, state.value.snapshot)
+    }
+
+    suspend fun previewBoard(request: BoardImportRequest): BoardImportPreview = locked {
+        requireWritable()
+        makeBoardPreview(request, state.value.snapshot)
+    }
+
+    suspend fun applyBoard(preview: BoardImportPreview): BoardImportReceipt = locked {
+        requireWritable()
+        val snapshot = state.value.snapshot
+        val current = makeBoardPreview(preview.request, snapshot)
+        if (current.alreadyHandled) return@locked current.receipt!!
+        requireWorkspace(snapshot.revision == preview.baselineRevision,
+            "The workspace changed after preview. Review the Semester Board again.")
+        requireWorkspace(current == preview, "The reviewed Semester Board changed. Review it again.")
+        val receipt = BoardImportReceipt(canonical(preview.request.proposal.proposalID), preview.digest,
+            preview.request.proposal.source, preview.payload, preview.semesterID,
+            preview.beforeSemester, preview.afterSemester, preview.beforeCourses, preview.afterCourses,
+            preview.beforeAssessments, preview.afterAssessments, appliedAt = Instant.now().toString(), rawFile = preview.request.rawFile)
+        commit(snapshot.copy(revision = nextRevision(snapshot),
+            semesters = replaceRecords(snapshot.semesters, listOfNotNull(receipt.afterSemester)) { it.id },
+            courses = replaceRecords(snapshot.courses, receipt.afterCourses) { it.id },
+            assessments = replaceRecords(snapshot.assessments, receipt.afterAssessments) { it.id },
+            boardReceipts = snapshot.boardReceipts + receipt))
+        receipt
+    }
+
+    suspend fun undoBoard(proposalID: String): BoardImportReceipt = locked {
+        requireWritable()
+        val snapshot = state.value.snapshot
+        val id = canonical(proposalID)
+        val receipt = snapshot.boardReceipts.find { it.proposalID == id }
+            ?: throw WorkspaceException("The saved Semester Board receipt is unavailable.")
+        if (receipt.state == ReceiptState.UNDONE) return@locked receipt
+        receipt.afterSemester?.let { requireWorkspace(snapshot.semesters.find { item -> item.id == it.id } == it, changedUndo) }
+        receipt.afterCourses.forEach { requireWorkspace(snapshot.courses.find { item -> item.id == it.id } == it, changedUndo) }
+        receipt.afterAssessments.forEach { requireWorkspace(snapshot.assessments.find { item -> item.id == it.id } == it, changedUndo) }
+        val createdSemesterIDs = if (receipt.beforeSemester == null) listOfNotNull(receipt.afterSemester?.id).toSet() else emptySet()
+        val createdCourseIDs = receipt.afterCourses.map { it.id }.toSet() - receipt.beforeCourses.map { it.id }.toSet()
+        val createdAssessmentIDs = receipt.afterAssessments.map { it.id }.toSet() - receipt.beforeAssessments.map { it.id }.toSet()
+        requireWorkspace(snapshot.courses.none { !it.archived && it.semesterID in createdSemesterIDs && it.id !in createdCourseIDs }, dependentUndo)
+        requireWorkspace(snapshot.assessments.none { !it.archived && (it.semesterID in createdSemesterIDs || it.courseID in createdCourseIDs) && it.id !in createdAssessmentIDs }, dependentUndo)
+        requireWorkspace(snapshot.tasks.none { !it.archived && (it.sourceCourseID in createdCourseIDs || it.sourceAssessmentID in createdAssessmentIDs) }, dependentUndo)
+        val semesterValues = listOfNotNull(receipt.beforeSemester ?: receipt.afterSemester?.copy(archived = true))
+        val courseValues = receipt.afterCourses.map { after -> receipt.beforeCourses.find { it.id == after.id } ?: after.copy(archived = true) }
+        val assessmentValues = receipt.afterAssessments.map { after -> receipt.beforeAssessments.find { it.id == after.id } ?: after.copy(archived = true) }
+        val restored = snapshot.copy(semesters = replaceRecords(snapshot.semesters, semesterValues) { it.id },
+            courses = replaceRecords(snapshot.courses, courseValues) { it.id },
+            assessments = replaceRecords(snapshot.assessments, assessmentValues) { it.id })
+        // Later progress may reference a newly added status even when the parent import is otherwise untouched.
+        validateWorkspace(restored)
+        val undone = receipt.copy(state = ReceiptState.UNDONE, undoneAt = Instant.now().toString())
+        commit(restored.copy(revision = nextRevision(snapshot),
+            boardReceipts = snapshot.boardReceipts.map { if (it.proposalID == id) undone else it }))
+        undone
+    }
+
+    suspend fun setWeekStatus(semesterID: String, courseID: String, week: Int, statusID: String?,
+        expectedEntry: AcademicWeekEntry?, expectedStatuses: List<AcademicStatus>) = mutate { snapshot ->
+        val semester = snapshot.semesters.find { it.id == canonical(semesterID) && !it.archived }
+            ?: throw WorkspaceException("This semester is unavailable.")
+        val course = snapshot.courses.find { it.id == canonical(courseID) && it.semesterID == semester.id && !it.archived }
+            ?: throw WorkspaceException("This course is unavailable.")
+        requireWorkspace(week in 1..52, "The source week is invalid.")
+        requireWorkspace(course.entries[week] == expectedEntry && semester.statuses == expectedStatuses,
+            "This week or its status choices changed. Reload before changing its status.")
+        val selected = statusID?.let(::canonical)
+        val fallback = ch.habits.android.semester.SemesterBoardProjection.statuses(semester)
+        requireWorkspace(selected == null || fallback.any { it.id == selected }, "This status is unavailable.")
+        // Choosing a fallback makes the choices durable without seeding any other week progress.
+        val statuses = if (selected != null && semester.statuses.none { it.id == selected })
+            fallback else semester.statuses
+        if (expectedEntry == null && selected == null) return@mutate snapshot
+        val entry = (expectedEntry ?: AcademicWeekEntry()).copy(statusID = selected)
+        if (entry == expectedEntry && statuses == semester.statuses) snapshot else snapshot.copy(
+            semesters = replaceRecords(snapshot.semesters, listOf(semester.copy(statuses = statuses))) { it.id },
+            courses = replaceRecords(snapshot.courses, listOf(course.copy(entries = course.entries + (week to entry)))) { it.id })
+    }
+
+    suspend fun setAssessmentState(expected: AcademicAssessment, state: String) = mutate { snapshot ->
+        requireWorkspace(state in setOf("pending", "completed", "dismissed"), "Choose a valid assessment state.")
+        val current = snapshot.assessments.find { it.id == expected.id && !it.archived }
+            ?: throw WorkspaceException("This assessment is unavailable.")
+        requireWorkspace(current == expected, "This assessment changed. Reload before changing its state.")
+        if (current.recordedState == state) snapshot else snapshot.copy(assessments = replaceRecords(snapshot.assessments,
+            listOf(current.copy(completed = state == "completed", dismissed = state == "dismissed",
+                completedAt = if (state == "completed") Instant.now().toString() else null))) { it.id })
     }
 
     suspend fun apply(preview: PlanPreview): PlanReceipt = locked {
@@ -84,8 +175,8 @@ class WorkspaceRepository(private val file: File) {
         val receipt = snapshot.receipts.find { it.proposalID == id }
             ?: throw WorkspaceException("The saved import receipt is unavailable.")
         if (receipt.state == ReceiptState.UNDONE) return@locked receipt
-        receipt.createdSemesters.forEach { requireWorkspace(snapshot.semesters.find { item -> item.id == it.id } == it, changedUndo) }
-        receipt.createdCourses.forEach { requireWorkspace(snapshot.courses.find { item -> item.id == it.id } == it, changedUndo) }
+        receipt.createdSemesters.forEach { expected -> requireWorkspace(snapshot.semesters.find { item -> item.id == expected.id }?.let { sameV1Semester(it, expected) && !hasBoardSemesterMetadata(it) } == true, changedUndo) }
+        receipt.createdCourses.forEach { expected -> requireWorkspace(snapshot.courses.find { item -> item.id == expected.id }?.let { sameV1Course(it, expected) && !hasBoardCourseMetadata(it) } == true, changedUndo) }
         receipt.createdAssessments.forEach { requireWorkspace(snapshot.assessments.find { item -> item.id == it.id } == it, changedUndo) }
         receipt.createdTasks.forEach { requireWorkspace(snapshot.tasks.find { item -> item.id == it.id } == it, changedUndo) }
         val semesterIDs = receipt.createdSemesters.map { it.id }.toSet()
@@ -94,7 +185,7 @@ class WorkspaceRepository(private val file: File) {
         val taskIDs = receipt.createdTasks.map { it.id }.toSet()
         requireWorkspace(snapshot.courses.none { !it.archived && it.semesterID in semesterIDs && it.id !in courseIDs }, dependentUndo)
         requireWorkspace(snapshot.assessments.none { !it.archived && (it.semesterID in semesterIDs || it.courseID in courseIDs) && it.id !in assessmentIDs }, dependentUndo)
-        requireWorkspace(snapshot.tasks.none { !it.archived && it.sourceAssessmentID in assessmentIDs && it.id !in taskIDs }, dependentUndo)
+        requireWorkspace(snapshot.tasks.none { !it.archived && (it.sourceAssessmentID in assessmentIDs || it.sourceCourseID in courseIDs) && it.id !in taskIDs }, dependentUndo)
         val undone = receipt.copy(state = ReceiptState.UNDONE, undoneAt = Instant.now().toString())
         commit(snapshot.copy(revision = nextRevision(snapshot),
             semesters = snapshot.semesters.map { if (it.id in semesterIDs) it.copy(archived = true) else it },
@@ -107,6 +198,7 @@ class WorkspaceRepository(private val file: File) {
 
     suspend fun saveTask(task: WorkTask) = mutate { snapshot ->
         val value = task.copy(id = canonical(task.id), sourceAssessmentID = task.sourceAssessmentID?.let(::canonical),
+            sourceCourseID = task.sourceCourseID?.let(::canonical),
             sourceZone = task.sourceZone ?: if (task.dueTime != null) ZoneId.systemDefault().id else null)
         validateTask(value, snapshot)
         val old = snapshot.tasks.find { it.id == value.id }
@@ -133,8 +225,8 @@ class WorkspaceRepository(private val file: File) {
     suspend fun completeAssessment(id: String, completed: Boolean = true) = mutate { snapshot ->
         val assessment = snapshot.assessments.find { it.id == canonical(id) && !it.archived }
             ?: throw WorkspaceException("This assessment is unavailable.")
-        if (assessment.completed == completed) snapshot else snapshot.copy(assessments = replacing(snapshot.assessments,
-            assessment.copy(completed = completed, completedAt = if (completed) Instant.now().toString() else null)) { it.id })
+        if (assessment.completed == completed && !assessment.dismissed) snapshot else snapshot.copy(assessments = replacing(snapshot.assessments,
+            assessment.copy(completed = completed, dismissed = false, completedAt = if (completed) Instant.now().toString() else null)) { it.id })
     }
 
     suspend fun saveHabit(habit: Habit) = mutate { snapshot ->
@@ -191,6 +283,9 @@ class WorkspaceRepository(private val file: File) {
     suspend fun restoreBackup() = locked {
         val bytes = try { backupFile.readBytes() } catch (_: Exception) { throw WorkspaceException("No readable backup is available.") }
         val backup = try { decode(bytes) } catch (_: Exception) { throw WorkspaceException("No valid backup is available.") }
+        try { preserveSchemaV1Bytes(bytes) } catch (failure: Exception) {
+            throw WorkspaceException("The legacy backup could not be preserved. Original files were kept; no recovery was applied.").also { it.initCause(failure) }
+        }
         if (file.exists()) {
             val preserved = File(file.absolutePath + ".recovery-${UUID.randomUUID()}")
             atomicWrite(preserved, file.readBytes())
@@ -224,6 +319,7 @@ class WorkspaceRepository(private val file: File) {
 
     private fun makePreview(input: AcademicPlan, snapshot: WorkspaceSnapshot): PlanPreview {
         val plan = canonicalPlan(input)
+        requireWorkspace(snapshot.boardReceipts.none { it.proposalID == plan.proposalID }, "This proposal ID belongs to a Semester Board import.")
         val digest = planDigest(plan)
         val previous = snapshot.receipts.find { it.proposalID == plan.proposalID }
         if (previous != null) {
@@ -234,13 +330,13 @@ class WorkspaceRepository(private val file: File) {
         val wantedSemester = AcademicSemester(plan.semester.id, plan.semester.title, plan.semester.startDate,
             plan.semester.weekCount, plan.semester.timeZoneIdentifier)
         val oldSemester = snapshot.semesters.find { it.id == wantedSemester.id }
-        requireWorkspace(oldSemester == null || oldSemester == wantedSemester, "Existing semester metadata conflicts with the proposal.")
+        requireWorkspace(oldSemester == null || sameV1Semester(oldSemester, wantedSemester), "Existing semester metadata conflicts with the proposal.")
         requireWorkspace(snapshot.semesters.none { it.id != wantedSemester.id && it.copy(id = wantedSemester.id, archived = false) == wantedSemester },
             "A semester with this title, date range and timezone already exists, including retained history.")
         val newSemesters = if (oldSemester == null) listOf(wantedSemester) else emptyList()
         val newCourses = plan.courses.map { AcademicCourse(it.id, wantedSemester.id, it.name) }.filter { wanted ->
             val old = snapshot.courses.find { it.id == wanted.id }
-            requireWorkspace(old == null || old == wanted, "Existing course metadata conflicts with the proposal.")
+            requireWorkspace(old == null || sameV1Course(old, wanted), "Existing course metadata conflicts with the proposal.")
             requireWorkspace(snapshot.courses.none { it.id != wanted.id && it.semesterID == wanted.semesterID &&
                 Normalizer.normalize(it.name, Normalizer.Form.NFC) == Normalizer.normalize(wanted.name, Normalizer.Form.NFC) },
                 "A course with this name already exists in the semester, including retained history.")
@@ -252,7 +348,7 @@ class WorkspaceRepository(private val file: File) {
             AcademicAssessment(it.id, wantedSemester.id, it.courseID, it.title, it.kind, it.dueDate, it.dueTime, it.notes)
         }.filter { wanted ->
             val old = snapshot.assessments.find { it.id == wanted.id }
-            requireWorkspace(old == null || (!old.archived && old.copy(completed = false, completedAt = null) == wanted),
+            requireWorkspace(old == null || (!old.archived && sameV1Assessment(old, wanted)),
                 "Existing assessment content conflicts with the proposal.")
             requireWorkspace(snapshot.assessments.none { it.id != wanted.id && assessmentKey(it) == assessmentKey(wanted) },
                 "An assessment with this course, title, kind and deadline already exists, including retained history.")
@@ -316,6 +412,7 @@ class WorkspaceRepository(private val file: File) {
         val bytes = workspaceJson.encodeToString(snapshot).toByteArray(Charsets.UTF_8)
         requireWorkspace(bytes.size <= 32 * 1024 * 1024, "The workspace file size limit was reached. Previously saved records were preserved.")
         try {
+            durableBytes?.let(::preserveSchemaV1Bytes)
             if (!preserveBackup) durableBytes?.let { atomicWrite(backupFile, it) }
             atomicWrite(file, bytes)
             durableBytes = bytes
@@ -326,16 +423,24 @@ class WorkspaceRepository(private val file: File) {
         }
     }
 
+    /** The caller validates bytes first; recovery must preserve its backup even without a readable primary. */
+    private fun preserveSchemaV1Bytes(bytes: ByteArray) {
+        val version = workspaceJson.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonObject["schemaVersion"]
+        if (version?.toString() == "1" && !schemaV1BackupFile.exists()) atomicWrite(schemaV1BackupFile, bytes)
+    }
+
     private fun decode(bytes: ByteArray): WorkspaceSnapshot {
         requireWorkspace(bytes.size <= 32 * 1024 * 1024, "The workspace file is too large.")
         val text = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString()
         val root = workspaceJson.parseToJsonElement(text).jsonObject
         requireWorkspace(root.keys.containsAll(setOf("schemaVersion", "revision", "semesters", "courses", "assessments", "tasks", "appointments", "habits", "habitLogs", "receipts", "preferences")), "The workspace file is incomplete.")
-        return workspaceJson.decodeFromString<WorkspaceSnapshot>(text).also(::validateWorkspace)
+        val stored = workspaceJson.decodeFromString<WorkspaceSnapshot>(text)
+        requireWorkspace(stored.schemaVersion in 1..2, "The workspace version is unsupported.")
+        return stored.copy(schemaVersion = 2).also(::validateWorkspace)
     }
 
-    private fun validBackup(): Boolean = try { backupFile.isFile && decode(backupFile.readBytes()).schemaVersion == 1 } catch (_: Exception) { false }
+    private fun validBackup(): Boolean = try { backupFile.isFile && decode(backupFile.readBytes()).schemaVersion == 2 } catch (_: Exception) { false }
 
     private fun atomicWrite(destination: File, bytes: ByteArray) {
         val parent = destination.absoluteFile.parentFile ?: throw WorkspaceException("The workspace directory is unavailable.")
@@ -413,6 +518,9 @@ private fun validTitle(value: String) = requireWorkspace(value.isNotBlank() && v
 
 private fun validNotes(value: String) = requireWorkspace(value.length <= 4000 && value.none { it.isISOControl() && it !in "\n\r\t" }, "Notes are too long or contain unsupported control characters.")
 
+// iOS raw academic imports retain recorded text. Strict v1 proposals and user-owned task editing keep their own limits.
+private fun validAcademicName(value: String) = requireWorkspace(value.isNotBlank(), "An academic name cannot be blank.")
+
 private fun validateTask(task: WorkTask, snapshot: WorkspaceSnapshot) {
     canonical(task.id); validTitle(task.title); validNotes(task.notes)
     requireWorkspace(task.kind in setOf("task", "assignment") && task.priority in setOf("low", "medium", "high") && task.minutes in 0..1440,
@@ -424,11 +532,37 @@ private fun validateTask(task: WorkTask, snapshot: WorkspaceSnapshot) {
         AcademicPlanValidator.resolveInstant(task.dueDate, task.dueTime, task.sourceZone ?: "UTC")
     }
     task.sourceAssessmentID?.let { id ->
-        requireWorkspace(snapshot.assessments.any { it.id == canonical(id) && !it.archived }, "The linked assessment is unavailable.")
+        val assessment = snapshot.assessments.find { it.id == canonical(id) && !it.archived }
+            ?: throw WorkspaceException("The linked assessment is unavailable.")
+        requireWorkspace(snapshot.courses.any { it.id == assessment.courseID && !it.archived } &&
+            snapshot.semesters.any { it.id == assessment.semesterID && !it.archived }, "The linked assessment parent is unavailable.")
+    }
+    requireWorkspace((task.sourceCourseID == null) == (task.sourceWeek == null), "A weekly preparation needs both its course and source week.")
+    requireWorkspace(task.sourceAssessmentID == null || task.sourceCourseID == null, "Preparation can link to an assessment or a source week, not both.")
+    task.sourceCourseID?.let { id ->
+        val course = snapshot.courses.find { it.id == canonical(id) && !it.archived }
+            ?: throw WorkspaceException("The linked course is unavailable.")
+        requireWorkspace(task.sourceWeek in 1..52 && snapshot.semesters.any { it.id == course.semesterID && !it.archived },
+            "The linked source week is unavailable.")
     }
     validateCompletion(task.completed, task.completedAt)
     Instant.parse(task.createdAt); Instant.parse(task.updatedAt)
 }
+
+private fun sameV1Semester(actual: AcademicSemester, expected: AcademicSemester): Boolean =
+    actual.id == expected.id && actual.title == expected.title && actual.startDate == expected.startDate &&
+        actual.weekCount == expected.weekCount && actual.timeZoneIdentifier == expected.timeZoneIdentifier && actual.archived == expected.archived
+private fun sameV1Course(actual: AcademicCourse, expected: AcademicCourse): Boolean =
+    actual.id == expected.id && actual.semesterID == expected.semesterID && actual.name == expected.name && actual.archived == expected.archived
+private fun sameV1Assessment(actual: AcademicAssessment, expected: AcademicAssessment): Boolean =
+    actual.id == expected.id && actual.semesterID == expected.semesterID && actual.courseID == expected.courseID &&
+        actual.title == expected.title && actual.kind == expected.kind && actual.dueDate == expected.dueDate &&
+        actual.dueTime == expected.dueTime && actual.notes == expected.notes && actual.archived == expected.archived
+private fun hasBoardSemesterMetadata(value: AcademicSemester): Boolean = value.endDate != null || value.showExamWeeks ||
+    value.statuses.isNotEmpty() || value.compatibilityFields.isNotEmpty()
+private fun hasBoardCourseMetadata(value: AcademicCourse): Boolean = value.moduleCode != null || value.sourceURL != null ||
+    value.scheduleNote != null || value.activeWeeks != null || value.entries.isNotEmpty() || value.externalID != null ||
+    value.boardOrder != null || value.compatibilityFields.isNotEmpty()
 
 private fun validateHabit(habit: Habit) {
     canonical(habit.id); validTitle(habit.title); validNotes(habit.notes)
@@ -453,29 +587,51 @@ private fun validateCompletion(completed: Boolean, completedAt: String?) {
     completedAt?.let { Instant.parse(it) }
 }
 
-private fun validateWorkspace(snapshot: WorkspaceSnapshot) {
-    requireWorkspace(snapshot.schemaVersion == 1 && snapshot.revision >= 0, "The workspace version or revision is unsupported.")
+internal fun validateWorkspace(snapshot: WorkspaceSnapshot) {
+    requireWorkspace(snapshot.schemaVersion == 2 && snapshot.revision >= 0, "The workspace version or revision is unsupported.")
     val ids = snapshot.semesters.map { it.id } + snapshot.courses.map { it.id } + snapshot.assessments.map { it.id } +
         snapshot.tasks.map { it.id } + snapshot.appointments.map { it.id } + snapshot.habits.map { it.id }
     requireWorkspace(ids.distinct().size == ids.size && ids.all { it == canonical(it) }, "The workspace contains invalid or duplicate IDs.")
     snapshot.semesters.forEach { item ->
-        validTitle(item.title); validDate(item.startDate); ZoneId.of(item.timeZoneIdentifier)
+        validAcademicName(item.title); item.startDate?.let(::validDate); item.endDate?.let(::validDate); ZoneId.of(item.timeZoneIdentifier)
+        requireWorkspace(item.endDate == null || item.startDate != null, "An end date needs a start date.")
+        if (item.startDate != null && item.endDate != null) {
+            val days = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(item.startDate), LocalDate.parse(item.endDate)) + 1
+            requireWorkspace(days in 1..364 && (days + 6) / 7 == item.weekCount.toLong(), "The date range and teaching week count disagree.")
+        }
+        requireWorkspace(item.statuses.map { it.id }.distinct().size == item.statuses.size && item.statuses.size <= 20, "Invalid or duplicate semester statuses.")
+        item.statuses.forEach { status -> canonical(status.id); validAcademicName(status.name); requireWorkspace(Regex("#[0-9a-fA-F]{6}").matches(status.colorHex), "A status color is invalid.") }
         requireWorkspace(item.weekCount in 1..52, "The semester week count is invalid.")
     }
+    snapshot.semesters.forEach { semester -> requireWorkspace(snapshot.courses.count { it.semesterID == semester.id && !it.archived } <= 10, "A semester can contain at most ten active courses.") }
+    requireWorkspace(snapshot.courses.map { it.semesterID to (it.externalID ?: it.id) }.distinct().size == snapshot.courses.size, "Duplicate scoped course identities.")
+    requireWorkspace(snapshot.assessments.map { it.courseID to (it.externalID ?: it.id) }.distinct().size == snapshot.assessments.size, "Duplicate scoped assessment identities.")
     snapshot.courses.forEach { item ->
-        validTitle(item.name)
-        requireWorkspace(snapshot.semesters.any { it.id == item.semesterID }, "The course semester is missing.")
+        validAcademicName(item.name)
+        val semester = snapshot.semesters.find { it.id == item.semesterID } ?: throw WorkspaceException("The course semester is missing.")
+        item.externalID?.let(::canonical)
+        requireWorkspace(item.boardOrder == null || item.boardOrder >= 0, "Course order is invalid.")
+        requireWorkspace(item.activeWeeks == null || (item.activeWeeks.size <= 52 && item.activeWeeks.distinct().size == item.activeWeeks.size && item.activeWeeks.all { it in 1..52 }), "Active source weeks are invalid.")
+        requireWorkspace(item.entries.size <= 52 && item.entries.keys.all { it in 1..52 }, "Source week entries are invalid.")
+        item.entries.values.forEach { entry -> entry.statusID?.let { id -> requireWorkspace(item.archived || semester.archived || semester.statuses.any { it.id == canonical(id) }, "A source week references a missing status.") } }
     }
     snapshot.assessments.forEach { item ->
-        validTitle(item.title); validNotes(item.notes); validDate(item.dueDate); item.dueTime?.let(::validTime)
+        validAcademicName(item.title); validDate(item.dueDate); item.dueTime?.let(::validTime)
         val semester = snapshot.semesters.find { it.id == item.semesterID } ?: throw WorkspaceException("The assessment semester is missing.")
         requireWorkspace(snapshot.courses.any { it.id == item.courseID && it.semesterID == item.semesterID }, "The assessment course is missing.")
         requireWorkspace(item.kind in setOf("exam", "presentation", "essay", "deadline"), "The assessment kind is invalid.")
-        AcademicPlanValidator.resolveInstant(item.dueDate, item.dueTime, semester.timeZoneIdentifier)
+        // Raw imported civil clocks can fall in a DST gap/overlap. Projection skips them rather than altering source facts.
+        item.externalID?.let(::canonical)
+        requireWorkspace(item.boardOrder == null || item.boardOrder >= 0, "Assessment order is invalid.")
+        requireWorkspace(!(item.completed && item.dismissed), "An assessment cannot be completed and dismissed.")
         validateCompletion(item.completed, item.completedAt)
     }
+    snapshot.semesters.filterNot { it.archived }.forEach { semester ->
+        // Raw semantic checks support unknown legacy schedules and retain valid DST civil clocks.
+        SemesterBoardCodec.validate(SemesterBoardExport.document(snapshot, semester.id, includeCompatibilityFields = true))
+    }
     // Archived relationships remain valid history after Undo.
-    val historicalSources = snapshot.copy(assessments = snapshot.assessments.map { it.copy(archived = false) })
+    val historicalSources = snapshot.copy(assessments = snapshot.assessments.map { it.copy(archived = false) }, courses = snapshot.courses.map { it.copy(archived = false) }, semesters = snapshot.semesters.map { it.copy(archived = false) })
     snapshot.tasks.forEach { validateTask(it, historicalSources) }
     snapshot.appointments.forEach(::validateAppointment)
     snapshot.habits.forEach(::validateHabit)
@@ -483,6 +639,8 @@ private fun validateWorkspace(snapshot: WorkspaceSnapshot) {
     snapshot.habitLogs.forEach { validDate(it.date); requireWorkspace(snapshot.habits.any { habit -> habit.id == it.habitID }, "The habit log source is missing.") }
     validatePreferences(snapshot.preferences)
     requireWorkspace(snapshot.receipts.map { it.proposalID }.distinct().size == snapshot.receipts.size, "Duplicate proposal receipts.")
+    requireWorkspace((snapshot.receipts.map { it.proposalID } + snapshot.boardReceipts.map { it.proposalID }).distinct().size == snapshot.receipts.size + snapshot.boardReceipts.size, "Duplicate proposal receipts.")
+    snapshot.boardReceipts.forEach { receipt -> validateBoardReceipt(receipt, snapshot) }
     snapshot.receipts.forEach { receipt ->
         requireWorkspace(receipt.proposalID == canonical(receipt.proposalID) && receipt.proposalID == canonical(receipt.plan.proposalID) &&
             receipt.digest == planDigest(receipt.plan), "The proposal receipt is invalid.")

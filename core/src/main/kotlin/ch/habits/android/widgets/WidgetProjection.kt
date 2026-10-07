@@ -1,13 +1,13 @@
 package ch.habits.android.widgets
 
-import ch.habits.android.core.AcademicPlanValidator
+import ch.habits.android.data.SourceClockResolution
 import ch.habits.android.data.WorkspaceFacts
 import ch.habits.android.data.WorkspaceState
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-enum class WidgetEntryKind { TASK, ASSIGNMENT, ASSESSMENT, APPOINTMENT }
+enum class WidgetEntryKind { TASK, ASSIGNMENT, ASSESSMENT, APPOINTMENT, PREPARATION }
 
 data class NextUpEntry(
     val id: String,
@@ -25,6 +25,7 @@ data class NextUpProjection(
     val totalCount: Int,
     val generatedAt: Instant,
     val recoveryRequired: Boolean,
+    val unresolvedCount: Int = 0,
 )
 
 data class TodayHabitEntry(val id: String, val title: String, val completed: Boolean)
@@ -53,36 +54,43 @@ object WidgetProjection {
         if (state.recoveryRequired) return NextUpProjection(emptyList(), 0, now, true)
         val snapshot = state.snapshot
         val queued = mutableListOf<Pair<Instant, NextUpEntry>>()
+        var unresolved = 0
         fun deadline(id: String, title: String, kind: WidgetEntryKind, date: String, time: String?, zone: String?) {
-            val source = zone?.let(ZoneId::of) ?: deviceZone
-            val day = LocalDate.parse(date)
-            // End-of-day is used only to order a date-only deadline. The view
-            // retains the civil date and a null time, never an invented clock.
-            val order = if (time == null) day.plusDays(1).atStartOfDay(source).toInstant().minusNanos(1)
-                else AcademicPlanValidator.resolveInstant(date, time, source.id)
-            val overdue = if (time == null) day < now.atZone(source).toLocalDate() else order < now
-            queued += order to NextUpEntry(id, title, kind, date, time, zone, overdue)
+            val candidate = runCatching {
+                val source = zone?.let(ZoneId::of) ?: deviceZone
+                val day = LocalDate.parse(date)
+                // Ordering a date-only deadline never invents a displayed clock.
+                val order = if (time == null) {
+                    require(day.atStartOfDay(source).toLocalDate() == day)
+                    day.plusDays(1).atStartOfDay(source).toInstant().minusNanos(1)
+                } else requireNotNull(SourceClockResolution.instant(date, time, source.id))
+                val overdue = if (time == null) day < now.atZone(source).toLocalDate() else order < now
+                order to NextUpEntry(id, title, kind, date, time, zone, overdue)
+            }.getOrNull()
+            if (candidate == null) unresolved += 1 else queued += candidate
         }
         snapshot.tasks.filter { !it.archived && !it.completed && it.dueDate != null }.forEach { task ->
-            deadline(task.id, task.title, if (task.kind == "assignment") WidgetEntryKind.ASSIGNMENT else WidgetEntryKind.TASK,
+            deadline(task.id, task.title, when { task.isPreparation -> WidgetEntryKind.PREPARATION
+                task.kind == "assignment" -> WidgetEntryKind.ASSIGNMENT; else -> WidgetEntryKind.TASK },
                 checkNotNull(task.dueDate), task.dueTime, task.sourceZone)
         }
         val semesters = snapshot.semesters.filterNot { it.archived }.associateBy { it.id }
         val courses = snapshot.courses.filterNot { it.archived }.associateBy { it.id }
-        snapshot.assessments.filter { !it.archived && !it.completed }.forEach { item ->
+        snapshot.assessments.filter { it.pending }.forEach { item ->
             val semester = semesters[item.semesterID]
             val course = courses[item.courseID]
             if (semester != null && course?.semesterID == semester.id) deadline(item.id, item.title,
                 WidgetEntryKind.ASSESSMENT, item.dueDate, item.dueTime, semester.timeZoneIdentifier)
         }
         snapshot.appointments.filterNot { it.archived }.forEach { item ->
-            val start = AcademicPlanValidator.resolveInstant(item.startDate, item.startTime, item.timeZoneIdentifier)
-            val end = AcademicPlanValidator.resolveInstant(item.endDate, item.endTime, item.timeZoneIdentifier)
+            val start = SourceClockResolution.instant(item.startDate, item.startTime, item.timeZoneIdentifier)
+            val end = SourceClockResolution.instant(item.endDate, item.endTime, item.timeZoneIdentifier)
+            if (start == null || end == null) { unresolved += 1; return@forEach }
             if (end > now) queued += start to NextUpEntry(item.id, item.title, WidgetEntryKind.APPOINTMENT,
                 item.startDate, item.startTime, item.timeZoneIdentifier, overdue = false, ongoing = start <= now)
         }
         val ordered = queued.sortedWith(compareBy<Pair<Instant, NextUpEntry>>({ it.first }, { it.second.kind.ordinal }, { it.second.id }))
-        return NextUpProjection(ordered.take(limit.coerceIn(0, 3)).map { it.second }, ordered.size, now, false)
+        return NextUpProjection(ordered.take(limit.coerceIn(0, 3)).map { it.second }, ordered.size, now, false, unresolved)
     }
 
     fun habitsToday(state: WorkspaceState, now: Instant, deviceZone: ZoneId, limit: Int = 3): TodayHabitsProjection {

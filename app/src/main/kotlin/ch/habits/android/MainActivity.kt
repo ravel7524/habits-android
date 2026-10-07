@@ -93,8 +93,17 @@ class MainActivity : ComponentActivity() {
                     if (runCatching { desktop.acknowledge(envelope, state) }.isFailure) break
                 }
             }
+            LaunchedEffect(workspace.snapshot.boardReceipts, remote.paired, remote.baseURL, remote.refreshRevision, workspace.recoveryRequired) {
+                if (!workspace.recoveryRequired && remote.paired) for (local in workspace.snapshot.boardReceipts) {
+                    val state = if (local.state == ReceiptState.UNDONE) "undone" else "applied"
+                    if (!desktop.needsAcknowledgement(local, state)) continue
+                    if (runCatching { desktop.acknowledge(local, state) }.isFailure) break
+                }
+            }
             HabitsApp(repository = repository,
                 desktopSection = { onPlan -> DesktopConnectionSection(desktop, repository, onPlan, runtime.viewModelScope) },
+                desktopConnection = desktop,
+                desktopBoardSection = { onPlan, onBoard -> DesktopConnectionSection(desktop, repository, onPlan, runtime.viewModelScope, onBoard) },
                 integrationsSection = { focus ->
                     fun label(en: String, de: String, es: String) = when (language) { "de", "german" -> de; "es", "spanish" -> es; else -> en }
                     IntegrationPanel("calendar", label("Calendar", "Kalender", "Calendario"), focus = focus == "calendar", language = language) { CalendarSettingsSection(runtime.calendar, language) }

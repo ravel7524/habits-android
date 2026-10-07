@@ -12,6 +12,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import ch.habits.android.calendar.CalendarState
 import ch.habits.android.data.WorkspaceSnapshot
+import ch.habits.android.data.SourceClockResolution
 import ch.habits.android.ui.UiCopy
 import java.time.Instant
 import java.time.LocalDate
@@ -34,7 +35,10 @@ internal fun resolveReportHighlight(fact: ReportFact, snapshot: WorkspaceSnapsho
     fun due(value: String?, clock: String?, sourceZone: String?, assessment: Boolean = false): String {
         if (value == null) { require(clock == null); return t("No deadline recorded", "Keine Frist erfasst", "Sin plazo registrado") }
         val pieces = mutableListOf(date(value, sourceZone))
-        if (clock != null) pieces += time(clock)
+        if (clock != null) {
+            require(SourceClockResolution.instant(value, clock, sourceZone ?: zone.id) != null)
+            pieces += time(clock)
+        }
         else pieces += if (assessment) t("Time not recorded", "Uhrzeit nicht erfasst", "Hora no registrada")
             else t("Date only", "Nur Datum", "Solo fecha")
         copy.zoneDetail(sourceZone)?.let { pieces += it }
@@ -55,7 +59,7 @@ internal fun resolveReportHighlight(fact: ReportFact, snapshot: WorkspaceSnapsho
             is ReportSourceRef.Task -> {
                 val task = snapshot?.tasks?.singleOrNull { it.id == reference.record.id } ?: return null
                 if (task != reference.record || task.completed != reference.completion || (!reference.completion && task.archived)) return null
-                val prep = task.sourceAssessmentID != null
+                val prep = task.isPreparation
                 val sourceKind = if (reference.completion) { if (prep) "preparation-completion" else "task-completion" }
                     else if (task.dueDate == null) { if (prep) "preparation-undated" else "task-undated" }
                     else if (prep) "preparation" else if (task.kind == "assignment") "assignment" else "task"
@@ -72,7 +76,7 @@ internal fun resolveReportHighlight(fact: ReportFact, snapshot: WorkspaceSnapsho
             is ReportSourceRef.Assessment -> {
                 val records = snapshot ?: return null
                 val assessment = records.assessments.singleOrNull { it.id == reference.record.id } ?: return null
-                if (assessment != reference.record || assessment.completed != reference.completion || (!reference.completion && assessment.archived)) return null
+                if (assessment != reference.record || assessment.completed != reference.completion || (!reference.completion && !assessment.pending)) return null
                 val courses = records.courses.filter { it.id == assessment.courseID }
                 val semesters = records.semesters.filter { it.id == assessment.semesterID }
                 if (courses.size > 1 || semesters.size > 1 || courses.singleOrNull() != reference.course || semesters.singleOrNull() != reference.semester) return null

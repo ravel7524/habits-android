@@ -1,0 +1,599 @@
+{
+  "date": "2026-10-06",
+  "version": "0.5.0",
+  "apkSHA256": "5b7b046dbe77a6a004dbb9e7831e9e5af32b9b78589bf2fb51c88377b36e2567",
+  "reviewerIndependence": "No application source inspection, edits, builds, device/runtime operations or delegation. Scores are based on inspected current-run PNGs and capture provenance.",
+  "scope": "24 real app composable states in an isolated test-host Activity plus8 actual MainActivity states at OSfont1.3; synthetic records. Runtime evidence supplied by a separate operator.",
+  "thresholdPerState": 8.5,
+  "overallRaw": 8.722,
+  "overallDisplay": 8.7,
+  "minimumRaw": 8.565,
+  "acceptedStates": 32,
+  "failedStates": 0,
+  "method": "Each of 10 flow families uses its lowest-scoring accepted state. Average those representative criterion scores, then apply rubric weights. Every accepted state must also pass independently.",
+  "states": [
+    {
+      "step": 1,
+      "family": "board",
+      "label": "Empty Semester",
+      "dimensions": {
+        "hierarchy": 8.6,
+        "usability": 8.7,
+        "typography_spacing": 8.8,
+        "states_copy_trust": 8.7,
+        "visible_accessibility": 8.6
+      },
+      "raw_score": 8.68,
+      "display_score": 8.7,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 2,
+      "family": "board",
+      "label": "Current-week grid, opening viewport",
+      "dimensions": {
+        "hierarchy": 8.8,
+        "usability": 8.8,
+        "typography_spacing": 8.8,
+        "states_copy_trust": 8.9,
+        "visible_accessibility": 8.5
+      },
+      "raw_score": 8.77,
+      "display_score": 8.8,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 3,
+      "family": "week_detail",
+      "label": "Week status and saved notes",
+      "dimensions": {
+        "hierarchy": 8.7,
+        "usability": 8.7,
+        "typography_spacing": 8.7,
+        "states_copy_trust": 8.9,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.73,
+      "display_score": 8.7,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 4,
+      "family": "preparation",
+      "label": "Undated week-preparation draft",
+      "dimensions": {
+        "hierarchy": 8.8,
+        "usability": 8.8,
+        "typography_spacing": 8.8,
+        "states_copy_trust": 8.7,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.77,
+      "display_score": 8.8,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 5,
+      "family": "preparation",
+      "label": "Preparation review before save",
+      "dimensions": {
+        "hierarchy": 8.8,
+        "usability": 8.9,
+        "typography_spacing": 8.8,
+        "states_copy_trust": 8.9,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.825,
+      "display_score": 8.8,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 6,
+      "family": "board",
+      "label": "Later exam week 18",
+      "dimensions": {
+        "hierarchy": 8.7,
+        "usability": 8.7,
+        "typography_spacing": 8.8,
+        "states_copy_trust": 8.9,
+        "visible_accessibility": 8.5
+      },
+      "raw_score": 8.72,
+      "display_score": 8.7,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 7,
+      "family": "assessments",
+      "label": "All assessment states, lower list",
+      "dimensions": {
+        "hierarchy": 8.7,
+        "usability": 8.6,
+        "typography_spacing": 8.7,
+        "states_copy_trust": 8.9,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.705,
+      "display_score": 8.7,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 8,
+      "family": "assessments",
+      "label": "Completed assessment detail",
+      "dimensions": {
+        "hierarchy": 8.7,
+        "usability": 8.8,
+        "typography_spacing": 8.7,
+        "states_copy_trust": 8.9,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.755,
+      "display_score": 8.8,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 9,
+      "family": "board",
+      "label": "Board with no source dates",
+      "dimensions": {
+        "hierarchy": 8.6,
+        "usability": 8.6,
+        "typography_spacing": 8.7,
+        "states_copy_trust": 8.9,
+        "visible_accessibility": 8.6
+      },
+      "raw_score": 8.665,
+      "display_score": 8.7,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 10,
+      "family": "week_detail",
+      "label": "Fallback status definitions",
+      "dimensions": {
+        "hierarchy": 8.7,
+        "usability": 8.7,
+        "typography_spacing": 8.7,
+        "states_copy_trust": 8.9,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.73,
+      "display_score": 8.7,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 11,
+      "family": "board",
+      "label": "Dense 52-week board, top rows",
+      "dimensions": {
+        "hierarchy": 8.6,
+        "usability": 8.6,
+        "typography_spacing": 8.7,
+        "states_copy_trust": 8.8,
+        "visible_accessibility": 8.5
+      },
+      "raw_score": 8.635,
+      "display_score": 8.6,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 12,
+      "family": "board",
+      "label": "Dense board, tenth course and sticky header",
+      "dimensions": {
+        "hierarchy": 8.6,
+        "usability": 8.6,
+        "typography_spacing": 8.6,
+        "states_copy_trust": 8.9,
+        "visible_accessibility": 8.5
+      },
+      "raw_score": 8.63,
+      "display_score": 8.6,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 13,
+      "family": "board",
+      "label": "Dark board, Compose font 1.3",
+      "dimensions": {
+        "hierarchy": 8.6,
+        "usability": 8.6,
+        "typography_spacing": 8.7,
+        "states_copy_trust": 8.9,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.68,
+      "display_score": 8.7,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 14,
+      "family": "week_detail",
+      "label": "Dark week dialog, Compose font 1.3",
+      "dimensions": {
+        "hierarchy": 8.7,
+        "usability": 8.7,
+        "typography_spacing": 8.7,
+        "states_copy_trust": 8.9,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.73,
+      "display_score": 8.7,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 15,
+      "family": "import_entry",
+      "label": "Raw import entry",
+      "dimensions": {
+        "hierarchy": 8.6,
+        "usability": 8.6,
+        "typography_spacing": 8.7,
+        "states_copy_trust": 8.9,
+        "visible_accessibility": 8.6
+      },
+      "raw_score": 8.665,
+      "display_score": 8.7,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 16,
+      "family": "import_selection",
+      "label": "Selective course import",
+      "dimensions": {
+        "hierarchy": 8.7,
+        "usability": 8.7,
+        "typography_spacing": 8.6,
+        "states_copy_trust": 8.9,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.71,
+      "display_score": 8.7,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 17,
+      "family": "import_preview",
+      "label": "New-record change preview",
+      "dimensions": {
+        "hierarchy": 8.7,
+        "usability": 8.7,
+        "typography_spacing": 8.7,
+        "states_copy_trust": 9,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.745,
+      "display_score": 8.7,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 18,
+      "family": "import_preview",
+      "label": "Import confirmation, lower viewport",
+      "dimensions": {
+        "hierarchy": 8.7,
+        "usability": 8.7,
+        "typography_spacing": 8.7,
+        "states_copy_trust": 9,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.745,
+      "display_score": 8.7,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 19,
+      "family": "import_receipts",
+      "label": "Applied import receipt",
+      "dimensions": {
+        "hierarchy": 8.8,
+        "usability": 8.9,
+        "typography_spacing": 8.8,
+        "states_copy_trust": 9.1,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.855,
+      "display_score": 8.9,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 20,
+      "family": "import_receipts",
+      "label": "Replayed import, retained receipt",
+      "dimensions": {
+        "hierarchy": 8.8,
+        "usability": 8.9,
+        "typography_spacing": 8.8,
+        "states_copy_trust": 9.1,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.855,
+      "display_score": 8.9,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 21,
+      "family": "import_receipts",
+      "label": "Undone receipt",
+      "dimensions": {
+        "hierarchy": 8.9,
+        "usability": 8.9,
+        "typography_spacing": 8.8,
+        "states_copy_trust": 9.1,
+        "visible_accessibility": 8.8
+      },
+      "raw_score": 8.895,
+      "display_score": 8.9,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 22,
+      "family": "import_error",
+      "label": "Invalid JSON with keyboard",
+      "dimensions": {
+        "hierarchy": 8.8,
+        "usability": 8.7,
+        "typography_spacing": 8.8,
+        "states_copy_trust": 9,
+        "visible_accessibility": 8.8
+      },
+      "raw_score": 8.805,
+      "display_score": 8.8,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 23,
+      "family": "recovery",
+      "label": "Preserved board in recovery",
+      "dimensions": {
+        "hierarchy": 8.7,
+        "usability": 8.6,
+        "typography_spacing": 8.7,
+        "states_copy_trust": 9,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.72,
+      "display_score": 8.7,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 24,
+      "family": "recovery",
+      "label": "Read-only week status dialog",
+      "dimensions": {
+        "hierarchy": 8.8,
+        "usability": 8.7,
+        "typography_spacing": 8.6,
+        "states_copy_trust": 9,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.75,
+      "display_score": 8.8,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "test-host"
+    },
+    {
+      "step": 25,
+      "family": "board",
+      "label": "Actual MainActivity board, OS font 1.3",
+      "dimensions": {
+        "hierarchy": 8.3,
+        "usability": 8.5,
+        "typography_spacing": 8.7,
+        "states_copy_trust": 8.9,
+        "visible_accessibility": 8.6
+      },
+      "raw_score": 8.565,
+      "display_score": 8.6,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "actual MainActivity; retained workspace with explicitly owned synthetic QA semester; real OS font 1.3"
+    },
+    {
+      "step": 26,
+      "family": "week_detail",
+      "label": "Actual status/notes dialog, OS font 1.3",
+      "dimensions": {
+        "hierarchy": 8.7,
+        "usability": 8.7,
+        "typography_spacing": 8.7,
+        "states_copy_trust": 9,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.745,
+      "display_score": 8.7,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "actual MainActivity; retained workspace with explicitly owned synthetic QA semester; real OS font 1.3"
+    },
+    {
+      "step": 27,
+      "family": "preparation",
+      "label": "Actual preparation editor and keyboard, OS font 1.3",
+      "dimensions": {
+        "hierarchy": 8.7,
+        "usability": 8.8,
+        "typography_spacing": 8.8,
+        "states_copy_trust": 8.8,
+        "visible_accessibility": 8.6
+      },
+      "raw_score": 8.745,
+      "display_score": 8.7,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "actual MainActivity; retained workspace with explicitly owned synthetic QA semester; real OS font 1.3"
+    },
+    {
+      "step": 28,
+      "family": "import_preview",
+      "label": "Actual existing-course UPDATE comparison, OS font 1.3",
+      "dimensions": {
+        "hierarchy": 8.7,
+        "usability": 8.7,
+        "typography_spacing": 8.8,
+        "states_copy_trust": 9.0,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.765,
+      "display_score": 8.8,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "Actual MainActivity retained QA workspace; TLS-staged existing-course UPDATE, unsaved; real OS font 1.3"
+    },
+    {
+      "step": 29,
+      "family": "import_preview",
+      "label": "Actual expanded CREATE assessment, OS font 1.3",
+      "dimensions": {
+        "hierarchy": 8.7,
+        "usability": 8.7,
+        "typography_spacing": 8.8,
+        "states_copy_trust": 9.0,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.765,
+      "display_score": 8.8,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "Actual MainActivity retained QA workspace; TLS-staged CREATE assessment, unsaved; actual OS font 1.3"
+    },
+    {
+      "step": 30,
+      "family": "import_receipts",
+      "label": "Actual applied receipt with desktop confirmation, OS font 1.3",
+      "dimensions": {
+        "hierarchy": 8.8,
+        "usability": 8.8,
+        "typography_spacing": 8.8,
+        "states_copy_trust": 9.1,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.83,
+      "display_score": 8.8,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "Actual MainActivity retained QA workspace; real OS font 1.3; applied authenticated proposal"
+    },
+    {
+      "step": 31,
+      "family": "week_detail",
+      "label": "Actual full long-course week detail, OS font 1.3",
+      "dimensions": {
+        "hierarchy": 8.7,
+        "usability": 8.7,
+        "typography_spacing": 8.8,
+        "states_copy_trust": 9.0,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.765,
+      "display_score": 8.8,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "Actual MainActivity retained QA workspace; real OS font 1.3; applied authenticated proposal"
+    },
+    {
+      "step": 32,
+      "family": "import_receipts",
+      "label": "Actual offline Undo with desktop receipt pending, OS font 1.3",
+      "dimensions": {
+        "hierarchy": 8.8,
+        "usability": 8.8,
+        "typography_spacing": 8.8,
+        "states_copy_trust": 9.1,
+        "visible_accessibility": 8.7
+      },
+      "raw_score": 8.83,
+      "display_score": 8.8,
+      "health": "PASS",
+      "visually_inspected": true,
+      "gate_pass": true,
+      "evidence_source": "Actual MainActivity after cold restart; explicitly owned correlated QA import locally undone with owned bridge offline; real OS 1.3"
+    }
+  ],
+  "limits": [
+    "Bounded supplied-screen review, not exhaustive acceptance of every record combination.",
+    "Offscreen continuations are not claimed visible.",
+    "Physical devices, realLAN, fullTalkBack, tablets/landscape/RTL, every locale/font and production acceptance remain open.",
+    "The initial design round failed10states; source presentation was revised and fresh accepted captures replaced them.",
+    "All32 currentstates pass individually; rounded overall doesnot hide a failed state."
+  ]
+}

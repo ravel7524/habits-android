@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 3,
+  "id": "22222222-2222-4222-8222-222222222222",
+  "title": "Synthetic course-week board",
+  "weekCount": 14,
+  "startDate": "2026-09-14",
+  "endDate": "2026-12-18",
+  "timeZoneIdentifier": "Europe/Zurich",
+  "showExamWeeks": true,
+  "statuses": [
+    {
+      "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "name": "Recorded done",
+      "colorHex": "#28A35A",
+      "futureStatusFlag": 42
+    },
+    {
+      "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "name": "Revisit",
+      "colorHex": "#E9C52F"
+    }
+  ],
+  "courses": [
+    {
+      "id": "33333333-3333-4333-8333-333333333333",
+      "name": "Synthetic statistics",
+      "moduleCode": "QA-STAT",
+      "activeWeeks": [
+        1,
+        2,
+        14,
+        52
+      ],
+      "entries": {
+        "1": {
+          "statusID": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "notes": "Synthetic recorded week note",
+          "futureWeekFlag": "kept"
+        },
+        "52": {
+          "notes": "Retained hidden week"
+        }
+      },
+      "assessments": [
+        {
+          "id": "33333333-3333-4333-8333-333333333333",
+          "title": "Legacy scoped exam identity",
+          "kind": "exam",
+          "dueDate": "2026-12-16",
+          "dueTime": "09:00",
+          "notes": "Synthetic exam note",
+          "state": "pending",
+          "futureAssessmentFlag": "kept",
+          "reminderDays": [
+            7,
+            1
+          ],
+          "snoozedUntil": 812160000.25
+        },
+        {
+          "id": "55555555-5555-4555-8555-555555555555",
+          "title": "Recorded completed essay",
+          "kind": "essay",
+          "dueDate": "2026-10-01",
+          "state": "completed",
+          "completedAt": 812160000.0
+        }
+      ],
+      "sourceURL": "https://example.invalid/statistics",
+      "scheduleNote": "Synthetic teaching schedule only",
+      "futureCourseFlag": [
+        1,
+        2
+      ]
+    }
+  ],
+  "futureSemesterFlag": {
+    "preserve": true
+  }
+}

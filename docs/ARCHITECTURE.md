@@ -48,7 +48,7 @@ The portable suite and Compose workflows cover contract validation, local writes
 
 ## Device integrations
 
-The 0.2 working tree adds read-only selected Calendar access, opt-in local reminders/report invitations and native home-screen widgets. `HabitsAndroidRuntime` owns the process-shared repository so widget actions and receivers use the same writer as activities. Device permission/preferences remain separate from the workspace and MCP context. See [integration contracts and scenarios](ANDROID-INTEGRATIONS.md).
+Device integrations added in 0.2 provide read-only selected Calendar access, opt-in local reminders/report invitations and native home-screen widgets. `HabitsAndroidRuntime` owns the process-shared repository so widget actions and receivers use the same writer as activities. Device permission/preferences remain separate from the workspace and MCP context. See [integration contracts and scenarios](ANDROID-INTEGRATIONS.md).
 
 ## Optional local model in 0.3
 
@@ -83,3 +83,11 @@ Old success/Undo snackbars are dismissed when an editor opens, including queued 
 The actual 4 GiB device state preserves verified model files but marks the selected 2.6B tier unavailable and not loaded; the 230M recovery remains explicit. A background return unloads native memory and keeps the recorded report available. An earlier seven-fact balanced acceptance attempt hit the 90-second deadline; an actual UI run and single bounded retry later succeeded without changing data, prompts or budget. Timing variability remains a limitation.
 
 Publication builds inherit native file-prefix maps for the checkout, build and NDK directories. Native source/assert/debug paths become portable; no model selection, sampling, budget, grammar or source-writing behavior changes. The public source tree and release assets exclude private runtime/signing data and downloaded weights.
+
+## Mobile Semester Board in 0.5
+
+`SemesterBoardCodec` distinguishes raw iOS schemas1–3 from the closed assistant/context DTO, retaining optional-field presence and compatible source metadata. `BoardImport` resolves scoped external IDs to existing or deterministic local records, previews source changes, and supplies before/after receipt images. `WorkspaceRepository` migrates schema1 to2 in memory, preserves original-version bytes on deliberate writes, and commits board source plus receipt atomically. Status/state edits use expected values; source unknowns and opaque metadata are not evidence of progress.
+
+`SemesterBoardProjection` derives source-relative/display weeks and marker lists without source writes. `SemesterBoardScreen` holds UI scroll/selection state, with fixed labels and synchronized week lanes. The import screen reviews selected files/courses/zone or a complete assistant proposal; the existing v1 exam screen remains reachable. Weekly/assessment preparation uses ordinary staged task drafts with explicit associations and independent completion.
+
+The separate Board desktop capability, queue and context routes preserve older phone readers. New receipt mappings survive empty queues/restart. Raw iOS local-file receipts cannot acquire desktop acknowledgement; an exact typed proposal file can correlate only with a previously authenticated remembered ID/content-fingerprint/opaque-digest mapping. Context exports whitelist selected academic fields, distinguish omitted schedule/notes and disclose partial network sharing. None of these paths enables sync. Full contracts/scenarios are in [Mobile Semester Board](ANDROID-SEMESTER-BOARD.md).

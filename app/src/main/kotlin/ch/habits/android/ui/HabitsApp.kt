@@ -49,6 +49,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.habits.android.core.AcademicPlan
 import ch.habits.android.data.Appointment
+import ch.habits.android.data.AcademicAssessment
+import ch.habits.android.data.AcademicCourse
+import ch.habits.android.data.AcademicSemester
+import ch.habits.android.desktop.DesktopConnection
+import ch.habits.android.semester.BoardProposal
 import ch.habits.android.data.Habit
 import ch.habits.android.data.WorkTask
 import ch.habits.android.data.WorkspaceFacts
@@ -73,6 +78,8 @@ fun HabitsApp(
     onReportAIExit: () -> Unit = {},
     destination: String? = null,
     destinationRevision: Int = 0,
+    desktopConnection: DesktopConnection? = null,
+    desktopBoardSection: (@Composable (onPlan: (AcademicPlan) -> Unit, onBoard: (BoardProposal) -> Unit) -> Unit)? = null,
 ) {
     val state by repository.state.collectAsStateWithLifecycle()
     val snapshot = state.snapshot
@@ -84,6 +91,12 @@ fun HabitsApp(
     var settings by rememberSaveable { mutableStateOf(false) }
     var settingsFocus by rememberSaveable { mutableStateOf<String?>(null) }
     var assistant by rememberSaveable { mutableStateOf(false) }
+    var boardImport by rememberSaveable { mutableStateOf(false) }
+    var incomingBoard by remember { mutableStateOf<BoardProposal?>(null) }
+    var incomingPlan by remember { mutableStateOf<AcademicPlan?>(null) }
+    var boardFailure by remember { mutableStateOf<String?>(null) }
+    var boardDetailRevision by remember { mutableStateOf(0) }
+    var creatingTaskDraft by remember { mutableStateOf<WorkTask?>(null) }
     var report by rememberSaveable { mutableStateOf<String?>(null) }
     var editor by remember { mutableStateOf<String?>(null) }
     var editingTask by remember { mutableStateOf<WorkTask?>(null) }
@@ -97,8 +110,8 @@ fun HabitsApp(
     var editorFailureMessage by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
-    fun closeDetail() { settings = false; settingsFocus = null; assistant = false; report = null; editor = null }
-    fun openSettingsSection(section: String?) { editor = null; assistant = false; report = null; settingsFocus = section; settings = true }
+    fun closeDetail() { settings = false; settingsFocus = null; assistant = false; boardImport = false; incomingBoard = null; incomingPlan = null; report = null; editor = null; creatingTaskDraft = null }
+    fun openSettingsSection(section: String?) { editor = null; assistant = false; boardImport = false; report = null; settingsFocus = section; settings = true }
     LaunchedEffect(destination, destinationRevision) {
         if (destination != null) {
             closeDetail()
@@ -111,7 +124,7 @@ fun HabitsApp(
             }
         }
     }
-    fun action(message: String, closeEditor: Boolean = false, undo: (suspend () -> Unit)? = null, block: suspend () -> Unit) {
+    fun action(message: String, closeEditor: Boolean = false, undo: (suspend () -> Unit)? = null, onFailure: ((String) -> Unit)? = null, block: suspend () -> Unit) {
         if (busy) return
         scope.launch {
             busy = true
@@ -131,7 +144,8 @@ fun HabitsApp(
                 if (failure is CancellationException) throw failure
                 busy = false
                 val failureMessage = failure.message ?: copy.t("The change could not be confirmed.", "Die Änderung konnte nicht bestätigt werden.", "No se pudo confirmar el cambio.")
-                if (editor != null) editorFailureMessage = failureMessage
+                if (onFailure != null) onFailure(failureMessage)
+                else if (editor != null) editorFailureMessage = failureMessage
                 else snackbar.showSnackbar(failureMessage, withDismissAction = true, duration = SnackbarDuration.Long)
             } finally { busy = false }
         }
@@ -145,7 +159,23 @@ fun HabitsApp(
             }
         }
     }
-    val detailOpen = settings || assistant || report != null || editor != null
+    fun prepare(semester: AcademicSemester, course: AcademicCourse, week: Int?, assessment: AcademicAssessment?) {
+        val existing = repository.state.value.snapshot.tasks.firstOrNull { !it.archived &&
+            if (assessment != null) it.sourceAssessmentID == assessment.id else it.sourceCourseID == course.id && it.sourceWeek == week }
+        editingTask = existing
+        creatingTaskDraft = if (existing != null) null else WorkTask(
+            title = if (assessment != null) copy.t("Prepare for ", "Vorbereiten: ", "Preparar ") + assessment.title
+                else copy.t("Review ", "Wiederholen: ", "Repasar ") + course.name + " · " + copy.t("Week ", "Woche ", "Semana ") + week,
+            minutes = 0, sourceZone = semester.timeZoneIdentifier,
+            sourceAssessmentID = assessment?.id, sourceCourseID = if (assessment == null) course.id else null,
+            sourceWeek = if (assessment == null) week else null)
+        creatingTaskDraft = creatingTaskDraft?.let { draft ->
+            val bounded = draft.title.take(200).trimEnd().let { if (it.lastOrNull()?.isHighSurrogate() == true) it.dropLast(1) else it }
+            draft.copy(title = bounded)
+        }
+        editor = "task"
+    }
+    val detailOpen = settings || assistant || boardImport || report != null || editor != null
     BackHandler(enabled = detailOpen) { closeDetail() }
     LaunchedEffect(editor) { editorFailureMessage = null }
     // Pending success/Undo feedback from another screen must not intercept the editor footer.
@@ -157,6 +187,7 @@ fun HabitsApp(
         Scaffold(modifier = Modifier.semantics { testTagsAsResourceId = true }, containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 val heading = when {
+                    boardImport -> copy.t("Semester Board", "Semesterübersicht", "Tablero del semestre")
                     assistant -> copy.t("Plan with an assistant", "Mit einem Assistenten planen", "Planificar con un asistente")
                     settings -> copy.settings
                     report != null -> reportTitle(report!!, copy)
@@ -200,7 +231,19 @@ fun HabitsApp(
                 }
                 val writable = !busy && !state.recoveryRequired
                 when {
-                    assistant -> AssistantPlanScreen(repository, state, selectedSemester?.id, copy, desktopSection)
+                    boardImport -> SemesterBoardImportScreen(repository, copy, onBack = {
+                        closeDetail(); tab = "planner"; plannerMode = "semester"
+                    }, desktop = desktopConnection, providedProposal = incomingBoard,
+                        onImported = { semesterID = it },
+                        desktopSection = { onBoard -> desktopBoardSection?.invoke({ value ->
+                            incomingPlan = value; boardImport = false; assistant = true
+                        }, onBoard) })
+                    assistant -> AssistantPlanScreen(repository, state, selectedSemester?.id, copy,
+                        desktopSection = { onPlan ->
+                            if (desktopBoardSection != null) desktopBoardSection(onPlan) { value ->
+                                incomingBoard = value; assistant = false; boardImport = true
+                            } else desktopSection(onPlan)
+                        }, providedPlan = incomingPlan)
                     settings -> SettingsScreen(state, copy, busy, focusSection = settingsFocus, integrationsSection = { integrationsSection(settingsFocus) },
                         onPreferences = { value -> action(copy.t("Settings saved", "Einstellungen gespeichert", "Ajustes guardados")) { repository.savePreferences(value) } },
                         onExport = { exporter.launch("habits-backup-${LocalDate.now()}.json") },
@@ -213,7 +256,7 @@ fun HabitsApp(
                         ReportScreen(reportKind, snapshot, copy, calendarSection = { calendarSection(LocalDate.now()) { openSettingsSection("calendar") } },
                             aiSection = { reportScope -> reportAISection(reportKind, snapshot, reportScope) { openSettingsSection("localai") } }, onAIExit = onReportAIExit, onCalendarRecovery = { openSettingsSection("calendar") })
                     }
-                    editor == "task" -> TaskEditor(editingTask, copy, busy,
+                    editor == "task" -> TaskEditor(editingTask, copy, busy, initialDraft = creatingTaskDraft,
                         onSave = { value ->
                             val previous = editingTask
                             var saved: WorkTask? = null
@@ -246,8 +289,24 @@ fun HabitsApp(
                             undo = { repository.saveHabit(value.copy(archived = false)) }) { repository.archiveHabit(value.id) } })
                     tab == "planner" -> PlannerScreen(snapshot, copy, writable, plannerMode, { plannerMode = it }, selectedSemester?.id,
                         calendarSection = { calendarSection(null) { openSettingsSection("calendar") } },
-                        onSelectSemester = { semesterID = it }, onAssistant = { assistant = true },
-                        onNewTask = { editingTask = null; editor = "task" }, onEditTask = { editingTask = it; editor = "task" },
+                        onSelectSemester = { semesterID = it }, onAssistant = { incomingBoard = null; boardImport = true },
+                        onImportBoard = { incomingBoard = null; boardImport = true },
+                        onLegacyAssistant = { incomingPlan = null; boardImport = false; assistant = true },
+                        onWeekStatus = { selection, status, entry, statuses ->
+                            action(copy.t("Week status saved", "Wochenstatus gespeichert", "Estado semanal guardado"), onFailure = { boardFailure = it }) {
+                                repository.setWeekStatus(selection.semesterID, selection.courseID, selection.week, status, entry, statuses)
+                                boardFailure = null; boardDetailRevision++
+                            }
+                        },
+                        onAssessmentState = { value, status ->
+                            action(copy.t("Assessment updated", "Prüfung aktualisiert", "Evaluación actualizada"), onFailure = { boardFailure = it }) {
+                                repository.setAssessmentState(value, status); boardFailure = null; boardDetailRevision++
+                            }
+                        },
+                        onPrepare = ::prepare, detailRevision = boardDetailRevision, detailError = boardFailure,
+                        recoveryRequired = state.recoveryRequired,
+                        onReloadDetail = { boardFailure = null; boardDetailRevision++ },
+                        onNewTask = { editingTask = null; creatingTaskDraft = null; editor = "task" }, onEditTask = { editingTask = it; creatingTaskDraft = null; editor = "task" },
                         onCompleteTask = { value ->
                             var changed: WorkTask? = null
                             action(copy.t("Task updated", "Aufgabe aktualisiert", "Tarea actualizada"),

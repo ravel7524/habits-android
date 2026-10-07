@@ -283,10 +283,11 @@ internal fun SettingsScreen(state: WorkspaceState, copy: UiCopy, busy: Boolean,
                 for (record in archivedRecords.drop(currentPage * 20).take(20)) when (record) {
                     is WorkTask -> {
                         val item = record
-                        val liveAssessment = item.sourceAssessmentID == null || snapshot.assessments.any { it.id == item.sourceAssessmentID && !it.archived }
+                        val liveAssessment = (item.sourceAssessmentID == null || snapshot.assessments.any { it.id == item.sourceAssessmentID && !it.archived }) &&
+                            (item.sourceCourseID == null || snapshot.courses.any { it.id == item.sourceCourseID && !it.archived })
                         ArchivedRow(item.title, copy, writable && liveAssessment) { onRestoreTask(item) }
-                        if (!liveAssessment) Text(copy.t("Linked assessment archived. Keep this history or create a new proposal.", "Verknüpfte Prüfung archiviert. Behalte diese Historie oder erstelle einen neuen Vorschlag.",
-                            "La evaluación vinculada está archivada. Conserva este historial o crea una propuesta nueva."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (!liveAssessment) Text(copy.t("Linked academic source archived. Keep this history or create a new proposal.", "Verknüpfte Semesterquelle archiviert. Behalte diese Historie oder erstelle einen neuen Vorschlag.",
+                            "El origen académico vinculado está archivado. Conserva este historial o crea una propuesta nueva."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     is Appointment -> ArchivedRow(record.title, copy, writable) { onRestoreAppointment(record) }
                     is Habit -> ArchivedRow(record.title + " · " + copy.quantity(snapshot.habitLogs.count { it.habitID == record.id && it.completed },

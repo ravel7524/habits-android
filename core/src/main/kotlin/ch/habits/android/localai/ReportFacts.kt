@@ -94,7 +94,7 @@ object ReportFacts {
 
         if (kind == "morning") {
             snapshot.tasks.asSequence().filter { !it.archived && !it.completed }.forEach { task ->
-                val prep = task.sourceAssessmentID != null
+                val prep = task.isPreparation
                 val prefix = if (prep) copy.text("Open preparation", "Offene Vorbereitung", "Preparación pendiente")
                     else if (task.kind == "assignment") copy.text("Open assignment", "Offene Abgabe", "Entrega pendiente")
                     else copy.text("Open task", "Offene Aufgabe", "Tarea pendiente")
@@ -115,7 +115,7 @@ object ReportFacts {
                     }
                 }
             }
-            snapshot.assessments.asSequence().filter { !it.archived && !it.completed }.forEach { item ->
+            snapshot.assessments.asSequence().filter { it.pending }.forEach { item ->
                 val semester = semesters[item.semesterID]
                 val course = courses[item.courseID]
                 if (semester == null || course == null || semester.archived || course.archived || course.semesterID != item.semesterID) {
@@ -174,12 +174,12 @@ object ReportFacts {
             snapshot.tasks.asSequence().filter { it.completed }.forEach { task ->
                 val finished = instant(task.completedAt)
                 if (finished == null) untimedCompletions += 1 else if (finished >= from && finished < until) {
-                    val prefix = if (task.sourceAssessmentID != null) copy.text("Preparation completion recorded", "Vorbereitung abgeschlossen erfasst", "Preparación completada registrada")
+                    val prefix = if (task.isPreparation) copy.text("Preparation completion recorded", "Vorbereitung abgeschlossen erfasst", "Preparación completada registrada")
                         else if (task.kind == "assignment") copy.text("Assignment completion recorded", "Abgabe abgeschlossen erfasst", "Entrega completada registrada")
                         else copy.text("Task completion recorded", "Aufgabenabschluss erfasst", "Tarea completada registrada")
                     candidates.add(Candidate("task-completed/${task.id}", 0, -finished.toEpochMilli(), 0,
                         factText(prefix, task.title, finished.atZone(zone).toLocalDate().toString()),
-                        if (task.sourceAssessmentID != null) "preparation-completion" else "task-completion",
+                        if (task.isPreparation) "preparation-completion" else "task-completion",
                         ReportSourceRef.Task(task, completion = true)))
                 }
             }

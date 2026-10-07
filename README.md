@@ -1,21 +1,21 @@
 # Habits for Android
 
-**0.4.0 development preview** · Android 8.0 or newer
+**0.5.0 development preview** · Android 8.0 or newer
 
-A native Android app for daily work, appointments, habits and semester deadlines. Review an assistant's exam proposal before saving it, or use the planner independently. Your records stay on the phone unless you explicitly export or share them.
+A native Android app for daily work, appointments, habits and a course-week Semester Board. Import your timetable or review an assistant's proposal before saving it, or use the planner independently. Your records stay on the phone unless you explicitly export or share them.
 
 ## Download
 
-Get the [0.4.0 preview](https://github.com/ravel7524/habits-android/releases/tag/v0.4.0) or [download the APK](https://github.com/ravel7524/habits-android/releases/download/v0.4.0/habits-android-0.4.0-debug.apk). The release includes checksums and a manifest. This is a debug-signed development build, not a Play Store release.
+Get the [0.5.0 preview](https://github.com/ravel7524/habits-android/releases/tag/v0.5.0) or [download the APK](https://github.com/ravel7524/habits-android/releases/download/v0.5.0/habits-android-0.5.0-debug.apk). The release includes checksums and a manifest. This is a debug-signed development build, not a Play Store release.
 
 Open the APK with Android's browser or Files app. If asked, permit **Install unknown apps** for that app, then turn that permission off after installation. [Google's installation guidance](https://support.google.com/pixelphone/answer/7391672?hl=en) explains the setting; labels vary by device. Tasks and habits need no account or AI connection.
 
-**Existing installations:** 0.4 retains the separately held 0.2/0.3 development certificate and can update those builds in place. It uses a different certificate from public 0.1 and cannot update 0.1 in place. Export and retain your private backup before changing installations; uninstalling removes local data. Stable release signing and a supported 0.1 migration remain open.
+**Existing installations:** 0.5 retains the separately held 0.2–0.4 development certificate, permitting same-package updates in place. It uses a different certificate from public 0.1 and cannot update 0.1 in place. Export and retain your private backup before changing installations; uninstalling removes local data. Stable release signing and a supported 0.1 migration remain open.
 
 ## Daily use
 
 - **Today:** open deadlines, saved appointments and scheduled habits before report entry.
-- **Planner:** tasks/assignments, appointments and semester assessments with separate preparation. Native date/time pickers preserve date-only work. Review, then Confirm before saving.
+- **Planner:** tasks/assignments, appointments and a Semester Board with separate preparation. Native date/time pickers preserve date-only work. Review, then Confirm before saving.
 - **Habits:** scheduled days, daily completion and retained logs/archive history. Missing logs are unknown, not inferred misses.
 - **Reports:** offline Morning, Evening and Weekly summaries from saved facts. Estimated minutes describe planned work, not time studied.
 - **Calendar:** optional read-only access to calendars you select; events stay out of assistant context.
@@ -24,17 +24,28 @@ Open the APK with Android's browser or Files app. If asked, permit **Install unk
 - **Settings:** English/German/Spanish, appearance, local backup/recovery, archived history and optional device tools.
 
 <p>
-  <img src="docs/images/v0.4/today.png" alt="Synthetic populated Today" width="260">
-  <img src="docs/images/v0.4/work-preparation.png" alt="Synthetic Work view" width="260">
+  <img src="docs/images/v0.5/semester-board.png" alt="Synthetic Semester Board with current week and fixed course labels" width="260">
+  <img src="docs/images/v0.5/semester-week-large-text.png" alt="Actual large-text course-week detail and read-only notes" width="260">
 </p>
 
-## Plan exams with Codex or Claude
+## Semester Board
 
-Open **Planner → Semester → Plan with an assistant**. Share the instructions and your original timetable with your chosen assistant, then open or paste its JSON proposal. Check course, exam date/time/zone and preparation. Nothing is added until **Confirm and save**. Completing preparation does not complete the exam. Reopening a proposal does not duplicate it; guarded Undo preserves unrelated work and a durable receipt. [Format and synthetic example](docs/contracts/README.md).
+Open **Planner → Semester**. On a populated board, **Board tools → Import semester JSON** opens a raw iPhone `semester.json` file or a typed assistant proposal. The empty board shows its import actions directly. Check included courses, dates/time zone, notes and changes before **Confirm and save**.
 
-For connected delivery, install the separate [Habits MCP](https://github.com/ravel7524/habits-mcp) on your computer and use **Connect Codex or Claude** on the phone. It needs a reachable private desktop address. Pairing shares no records. You explicitly review one selected semester's context, including disclosed assessment notes/states, before sharing; an assistant may send that context to its provider. Offline file/paste import stays available.
+- Fixed course names/module codes beside horizontally scrolling source-relative weeks, current-week navigation and custom status labels/colors.
+- Week details with recorded status and read-only source notes; exam/deadline markers and an all-assessments list, including completed, dismissed and out-of-grid dates.
+- Reviewed merges preserve omitted records/history and later edits. A fresh review is required after source changes; reopening a consumed import creates no duplicates.
+- Separate preparation drafts from a week or assessment: undated, zero estimate, and saved only after review/Confirm. Completing preparation does not mark a week or assessment complete.
 
-Only phone review/confirmation applies a staged proposal. The desktop receives applied/undone receipts, with manual retry when delivery is unavailable. Version 1 adds academic content; it has no arbitrary app-code, UI-editing or destructive command.
+**Workspace upgrade:** schema 1 is read into schema 2 without rewriting its original file. The first deliberate edit retains an exact dedicated `workspace.json.schema-v1-backup`; subsequent edits preserve it alongside the rolling backup. Existing records and import receipts remain. **Downgrading an edited schema-2 workspace to 0.4 or earlier is unsupported.** Keep private version-specific exports/recovery files before changing installations. [Contracts, migration and scenarios](docs/ANDROID-SEMESTER-BOARD.md).
+
+## Plan with Codex or Claude
+
+Use **Planner → Semester → Board tools → Plan with an assistant** for the Board workflow. Connected Board delivery requires the separate [Habits MCP **0.2 or newer**](https://github.com/ravel7524/habits-mcp) on your computer and **Connect Codex or Claude** on the phone. It needs a reachable private desktop address. Pairing shares no records; you explicitly review one selected semester's context, including disclosed notes/states/weekly progress, before sharing. An assistant may send that context to its provider. File/paste import works without pairing.
+
+The assistant can propose course codes, schedules, status definitions, notes and assessments. Updating an existing board requires the digest of the phone's explicitly shared context. Proposals stay pending until phone review/confirmation; save/Undo receipts have explicit manual retry when the computer is unavailable. A raw iOS file has a local receipt. A typed file can update a known desktop receipt only when it matches an already authenticated ID/content fingerprint/opaque digest mapping. Neither pairing nor sharing enables sync, automatic imports, app-code/UI edits or destructive assistant commands.
+
+The older academic-plan v1 flow remains at **Board tools → Import exams and preparation** (or its direct empty-board action). Share its instructions and original timetable, then open/paste its JSON. Check course, exam date/time/zone and preparation before confirming. Older compatible phone/MCP versions continue using this v1 path. Guarded Undo preserves unrelated work and a durable consumed receipt. [Formats and synthetic examples](docs/contracts/README.md).
 
 ## Optional Liquid models on the phone
 
@@ -51,11 +62,13 @@ In a report, **Choose highlights** selects at most eight supplied fact IDs. The 
 
 ## Validation and limits
 
-The 0.4 rework received an independent **8.6/10** review: all **69 reviewed states across 14 families** scored at least **8.5** (lowest raw 8.525). Review includes populated/empty/staged/error states, actual MainActivity OS font scale 1.3, native pickers/software keyboard and real model recovery. [Dated public verification](docs/verification/0.4.0/README.md) records build and screenshot boundaries.
+The 0.5 Semester Board received an independent **8.7/10** review: all **32 scoped states** scored at least **8.5**, with a lowest raw score of **8.565**. Coverage includes the synthetic test-host board/import/recovery matrix and eight actual MainActivity states at OS font scale 1.3, including a real software keyboard, full long title and offline Undo/retry. [Dated verification](docs/verification/0.5.0/README.md) preserves artifact scope, rejected rounds and known limits.
 
-**139 core tests, 3 formatting tests and 65 affected Android tests passed**; accepted emulator launches had native LLDB attached. Actual fast selected-result UI completed in 1.6 s; balanced UI completed in 59.5 s and its bounded recorded-report retry in 54.845 s. Balanced attempts also hit the fixed 90-second deadline, including the final publication APK recheck. That APK passed all seven focused fast-model tests; its balanced recheck timed out and safely retained the recorded report. Successful earlier runs do not resolve this repeated timing limitation. Exact publication checks are recorded in the release manifest.
+**224 core tests and 3 app unit tests passed.** The final publication APK passed **13 targeted UI tests** and its **24-frame capture driver** with native LLDB attached before managed startup. An earlier unchanged-logic artifact passed **76 distinct affected Android checks**, including the **61 neighboring tests** and **7 actual fast-model checks**; recorded fast selection took **1.285 s** on seven original facts. Those checks were not all repeated on the final UI-only artifact. Actual schema migration/history, private TLS v1/Board delivery, selected-context consent/privacy, empty refresh/cold restart, offline Undo/receipt retry and exact backup export passed. The separate MCP package passed 84 checks and Swift v1 compatibility passed 63; neither count is an Android runtime count.
 
-Physical phones, heat/battery pressure, full TalkBack, tablets/landscape, real LAN routing and prolonged idle notification delivery remain separate acceptance. There is no automatic iPhone/Android sync or CloudKit integration. Source/test builds and visual scores do not establish production or physical-device parity.
+The older [0.4 UI review](docs/verification/0.4.0/README.md) remains historical: 69 states across 14 families passed, overall 8.6/minimum 8.525. Its balanced 2.6B UI and recorded retry succeeded in 59.5 s and 54.845 s, while other attempts—including its exact publication-artifact recheck—hit the unchanged 90-second deadline and retained recorded-report fallback. That repeated timing variability is unresolved. **The 2.6B profile was not retested for the 0.5 Board/UI changes.** [Model contracts and limits](docs/ANDROID-LOCAL-AI.md).
+
+Physical phones, heat/battery pressure, complete TalkBack, tablets/landscape/RTL, all locale/font combinations, real LAN routing and prolonged idle notification delivery remain separate acceptance. The APK is a development prerelease, not production or Play Store readiness. There is no automatic iPhone/Android sync or CloudKit integration; Android's local AI selects original fact highlights rather than the iPhone's full prose-generation feature set.
 
 ## Develop
 

@@ -1,6 +1,6 @@
 # Optional on-device report highlights
 
-The 0.4 preview includes downloaded Liquid models and CPU JNI inference. The public 0.4 package carries the 0.2 device integrations and 0.3 model work, with full original-source highlighting in the reworked UI. See [current verification](verification/0.4.0/README.md); the dated 0.3 checkpoints below remain historical. Physical-phone acceptance is open.
+The 0.5 preview retains the downloaded Liquid models and CPU JNI inference introduced before the Semester Board. Its native/model contracts remain unchanged from the 0.4 package, including full original-source highlighting. See [current Board verification](verification/0.5.0/README.md) and the [historical 0.4 model/publication checks](verification/0.4.0/README.md); the dated 0.3 checkpoints below remain historical. Physical-phone acceptance is open.
 
 ## User-controlled lifecycle
 
@@ -64,7 +64,7 @@ Earlier verbose-prompt UI attempts reached the 90-second native deadline and pre
 
 The first full run had two failures: a test-only competing native-load probe and a real deferred lazy-list state transition in the academic review screen. The probe was removed; captured composition state and stable row keys fixed the review screen. The final 50-test rerun passed, including all existing Compose tests. An earlier incomplete debugger setup after an APK update had an unexplained startup failure and is not counted as acceptance; restored debugger-wait setup preceded the passing final runs.
 
-Physical-phone performance, heat, battery life, extended memory pressure and process-death behaviour remain acceptance work. A fresh remote desktop pairing roundtrip, all-language/dark/accessibility visual coverage and 0.1-to-0.3 data/signing migration were not repeated. The local 0.3 build uses the retained private 0.2 development key; both are incompatible with the published 0.1 key. Export and preserve local data before trying another build; reinstall is not a harmless update workaround. These were pre-publication 0.3 results; the 0.4 release and its publication manifest record the current artifact separately. The model has no CloudKit integration and does not produce the iPhone's free-prose LLM reports.
+Physical-phone performance, heat, battery life, extended memory pressure and process-death behaviour remain acceptance work. A fresh remote desktop pairing roundtrip, all-language/dark/accessibility visual coverage and 0.1-to-0.3 data/signing migration were not repeated. The local 0.3 build uses the retained private 0.2 development key; both are incompatible with the published 0.1 key. Export and preserve local data before trying another build; reinstall is not a harmless update workaround. These were pre-publication 0.3 results; the 0.4 release and its publication manifest record that historical artifact separately. Current 0.5 verification records the Board/UI changes and explicitly scoped unchanged-model evidence. The model has no CloudKit integration and does not produce the iPhone's free-prose LLM reports.
 
 ## Scenarios to verify
 

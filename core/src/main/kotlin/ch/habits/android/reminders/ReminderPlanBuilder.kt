@@ -92,7 +92,7 @@ object ReminderPlanBuilder {
             result += ReminderPlan(token, key, kind, id, title, fire.toString(), expiry.toString(), day, sourceZone.id, timed, route, report)
         }
         if (prefs.tasksEnabled) for (task in snapshot.tasks) {
-            if (task.completed || task.archived || task.dueDate == null || (task.sourceAssessmentID != null && !prefs.includePreparation)) continue
+            if (task.completed || task.archived || task.dueDate == null || (task.isPreparation && !prefs.includePreparation)) continue
             val day = runCatching { LocalDate.parse(task.dueDate) }.getOrNull() ?: continue
             val source = runCatching { ZoneId.of(task.sourceZone ?: zone.id) }.getOrNull() ?: continue
             val clock = runCatching { LocalTime.parse(task.dueTime ?: "09:00") }.getOrNull() ?: continue
@@ -102,7 +102,7 @@ object ReminderPlanBuilder {
                 task.dueTime != null, "planner", "${task.kind}|${task.title}|${task.dueDate}|${task.dueTime}|${task.sourceZone}")
         }
         if (prefs.assessmentsEnabled) for (item in snapshot.assessments) {
-            if (item.archived || item.completed) continue
+            if (!item.pending) continue
             val semester = snapshot.semesters.firstOrNull { it.id == item.semesterID && !it.archived } ?: continue
             if (snapshot.courses.none { it.id == item.courseID && it.semesterID == semester.id && !it.archived }) continue
             val day = runCatching { LocalDate.parse(item.dueDate) }.getOrNull() ?: continue

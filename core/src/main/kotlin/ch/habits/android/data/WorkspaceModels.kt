@@ -4,10 +4,12 @@ import ch.habits.android.core.AcademicPlan
 import java.time.Instant
 import java.util.UUID
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 
 @Serializable
 data class WorkspaceSnapshot(
-    val schemaVersion: Int = 1,
+    val schemaVersion: Int = 2,
     val revision: Long = 0,
     val semesters: List<AcademicSemester> = emptyList(),
     val courses: List<AcademicCourse> = emptyList(),
@@ -18,6 +20,7 @@ data class WorkspaceSnapshot(
     val habitLogs: List<HabitLog> = emptyList(),
     val receipts: List<PlanReceipt> = emptyList(),
     val preferences: Preferences = Preferences(),
+    val boardReceipts: List<BoardImportReceipt> = emptyList(),
 )
 
 data class WorkspaceState(
@@ -31,11 +34,23 @@ data class WorkspaceState(
 data class AcademicSemester(
     val id: String,
     val title: String,
-    val startDate: String,
+    val startDate: String?,
     val weekCount: Int,
     val timeZoneIdentifier: String,
     val archived: Boolean = false,
+    val endDate: String? = null,
+    val showExamWeeks: Boolean = false,
+    val statuses: List<AcademicStatus> = emptyList(),
+    val compatibilityFields: JsonObject = JsonObject(emptyMap()),
 )
+
+@Serializable
+data class AcademicStatus(val id: String, val name: String, val colorHex: String,
+    val compatibilityFields: JsonObject = JsonObject(emptyMap()))
+
+@Serializable
+data class AcademicWeekEntry(val statusID: String? = null, val notes: String = "",
+    val compatibilityFields: JsonObject = JsonObject(emptyMap()))
 
 @Serializable
 data class AcademicCourse(
@@ -43,6 +58,15 @@ data class AcademicCourse(
     val semesterID: String,
     val name: String,
     val archived: Boolean = false,
+    val moduleCode: String? = null,
+    val sourceURL: String? = null,
+    val scheduleNote: String? = null,
+    val activeWeeks: List<Int>? = null,
+    val entries: Map<Int, AcademicWeekEntry> = emptyMap(),
+    /** Source UUIDs are scoped by semester; internal IDs also support old v1 links. */
+    val externalID: String? = null,
+    val boardOrder: Int? = null,
+    val compatibilityFields: JsonObject = JsonObject(emptyMap()),
 )
 
 @Serializable
@@ -58,7 +82,16 @@ data class AcademicAssessment(
     val completed: Boolean = false,
     val completedAt: String? = null,
     val archived: Boolean = false,
-)
+    val dismissed: Boolean = false,
+    /** Source assessment UUIDs may equal a course UUID or recur in another course. */
+    val externalID: String? = null,
+    val boardOrder: Int? = null,
+    val recurrence: JsonElement? = null,
+    val compatibilityFields: JsonObject = JsonObject(emptyMap()),
+) {
+    val pending: Boolean get() = !archived && !completed && !dismissed
+    val recordedState: String get() = if (completed) "completed" else if (dismissed) "dismissed" else "pending"
+}
 
 /** Civil dates remain explicit: a null dueTime is a date-only deadline. */
 @Serializable
@@ -78,6 +111,31 @@ data class WorkTask(
     val sourceAssessmentID: String? = null,
     val createdAt: String = Instant.now().toString(),
     val updatedAt: String = createdAt,
+    val sourceCourseID: String? = null,
+    val sourceWeek: Int? = null,
+) {
+    val isPreparation: Boolean get() = sourceAssessmentID != null || sourceCourseID != null
+}
+
+/** A board receipt records only reviewed changes; later edits block Undo. */
+@Serializable
+data class BoardImportReceipt(
+    val proposalID: String,
+    val digest: String,
+    val source: String,
+    val payload: String,
+    val semesterID: String,
+    val beforeSemester: AcademicSemester? = null,
+    val afterSemester: AcademicSemester? = null,
+    val beforeCourses: List<AcademicCourse> = emptyList(),
+    val afterCourses: List<AcademicCourse> = emptyList(),
+    val beforeAssessments: List<AcademicAssessment> = emptyList(),
+    val afterAssessments: List<AcademicAssessment> = emptyList(),
+    val state: ReceiptState = ReceiptState.APPLIED,
+    val appliedAt: String,
+    val undoneAt: String? = null,
+    /** Local raw imports are never a desktop assistant proposal or receipt. */
+    val rawFile: Boolean = false,
 )
 
 @Serializable

@@ -32,12 +32,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ch.habits.android.core.AcademicPlan
 import ch.habits.android.data.AssistantContextExporter
 import ch.habits.android.data.WorkspaceRepository
+import ch.habits.android.data.SourceClockResolution
+import ch.habits.android.semester.BoardProposal
+import ch.habits.android.semester.SemesterBoardExport
 import ch.habits.android.ui.UiCopy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
-fun DesktopConnectionSection(connection: DesktopConnection, repository: WorkspaceRepository, onPlan: (AcademicPlan) -> Unit, operations: kotlinx.coroutines.CoroutineScope? = null) {
+fun DesktopConnectionSection(connection: DesktopConnection, repository: WorkspaceRepository, onPlan: (AcademicPlan) -> Unit, operations: kotlinx.coroutines.CoroutineScope? = null, onBoardProposal: ((BoardProposal) -> Unit)? = null) {
     val state by connection.state.collectAsStateWithLifecycle()
     val workspace by repository.state.collectAsStateWithLifecycle()
     val localScope = rememberCoroutineScope()
@@ -52,6 +55,8 @@ fun DesktopConnectionSection(connection: DesktopConnection, repository: Workspac
     var expanded by remember { mutableStateOf(false) }
     var securityDetails by remember { mutableStateOf(false) }
     var shareReview by remember { mutableStateOf<DesktopShareReview?>(null) }
+    var includeNotes by remember { mutableStateOf(true) }
+    var includeWeekProgress by remember { mutableStateOf(true) }
     val semesters = workspace.snapshot.semesters.filterNot { it.archived }
     val selected = semesters.firstOrNull { it.id == selectedSemester }
     val context = LocalContext.current
@@ -128,7 +133,7 @@ fun DesktopConnectionSection(connection: DesktopConnection, repository: Workspac
                     }
                 } else {
                     Text(state.baseURL.orEmpty(), style = MaterialTheme.typography.bodyMedium)
-                    OutlinedButton(onClick = { submit { connection.refresh() } }, enabled = !state.busy, modifier = Modifier.fillMaxWidth().testTag("desktop.refresh"), colors = secondaryColors) {
+                    OutlinedButton(onClick = { submit { connection.refresh(registerCapabilities = true) } }, enabled = !state.busy, modifier = Modifier.fillMaxWidth().testTag("desktop.refresh"), colors = secondaryColors) {
                         Text(t("Refresh proposals & receipts", "Vorschläge und Belege aktualisieren", "Actualizar propuestas y recibos"))
                     }
                     Text(t("Share one semester", "Ein Semester teilen", "Compartir un semestre"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp))
@@ -143,16 +148,34 @@ fun DesktopConnectionSection(connection: DesktopConnection, repository: Workspac
                             }
                         }
                     }
-                    Text(t("Includes courses, assessment dates, notes and recorded states. Your assistant may send these to its AI provider.",
-                        "Enthält Kurse, Prüfungsdaten, Notizen und erfasste Zustände. Dein Assistent kann sie an seinen KI-Anbieter senden.",
-                        "Incluye cursos, fechas, notas y estados registrados. Tu asistente puede enviarlos a su proveedor de IA."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(t("Includes courses, assessment dates and recorded states. Choose whether to include notes. Your assistant may send the shared context to its AI provider.",
+                        "Enthält Kurse, Prüfungsdaten und erfasste Zustände. Wähle, ob Notizen enthalten sein sollen. Dein Assistent kann den geteilten Kontext an seinen KI-Anbieter senden.",
+                        "Incluye cursos, fechas y estados registrados. Elige si incluir notas. Tu asistente puede enviar el contexto compartido a su proveedor de IA."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(includeNotes, { includeNotes = it }, enabled = !state.busy, modifier = Modifier.testTag("desktop.share.notes"))
+                        Text(if (state.boardProposalsSupported) t("Include course, assessment and weekly notes", "Kurs-, Prüfungs- und Wochennotizen einschliessen", "Incluir notas de cursos, evaluaciones y semanas") else
+                            t("Include assessment notes", "Prüfungsnotizen einschliessen", "Incluir notas de evaluaciones"), style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (state.boardProposalsSupported) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(includeWeekProgress, { includeWeekProgress = it }, enabled = !state.busy, modifier = Modifier.testTag("desktop.share.progress"))
+                        Text(t("Include recorded weekly statuses", "Erfasste Wochenzustände einschliessen", "Incluir estados semanales registrados"), style = MaterialTheme.typography.bodySmall)
+                    }
                     OutlinedButton(onClick = {
                         val semester = selected ?: return@OutlinedButton
                         try {
                             val captured = workspace.snapshot
+                            val capturedSemester = captured.semesters.first { it.id == semester.id && !it.archived }
                             val courseIDs = captured.courses.filter { !it.archived && it.semesterID == semester.id }.map { it.id }.toSet()
-                            shareReview = DesktopShareReview(semester.title, AssistantContextExporter.sharedAcademicContext(captured, semester.id, includeNotes = true), captured.revision,
-                                courseIDs.size, captured.assessments.count { !it.archived && it.semesterID == semester.id && it.courseID in courseIDs })
+                            val capturedAssessments = captured.assessments.filter { !it.archived && it.semesterID == semester.id && it.courseID in courseIDs }
+                            val unresolvedClocks = capturedAssessments.count { item -> item.dueTime?.let {
+                                SourceClockResolution.instant(item.dueDate, it, capturedSemester.timeZoneIdentifier) == null
+                            } == true }
+                            val boardPayload = if (state.boardProposalsSupported) DesktopBoardContext.encode(
+                                SemesterBoardExport.document(captured, semester.id, includeNotes = includeNotes, includeWeekProgress = includeWeekProgress, includeCompatibilityFields = false),
+                                SemesterBoardExport.digest(captured, semester.id), includeNotes, includeWeekProgress) else null
+                            shareReview = DesktopShareReview(capturedSemester.title, AssistantContextExporter.sharedAcademicContext(captured, semester.id, includeNotes = includeNotes), captured.revision,
+                                courseIDs.size, capturedAssessments.size, boardPayload, includeNotes, includeWeekProgress, unresolvedClocks,
+                                boardPayload != null && capturedSemester.startDate != null && capturedSemester.endDate == null)
                             error = null
                         } catch (failure: Exception) { error = failure.message }
                     }, enabled = selected != null && !state.busy && !workspace.recoveryRequired, modifier = Modifier.fillMaxWidth().testTag("desktop.share"), colors = secondaryColors) {
@@ -160,7 +183,7 @@ fun DesktopConnectionSection(connection: DesktopConnection, repository: Workspac
                     }
                     HorizontalDivider(Modifier.padding(vertical = 4.dp))
                     Text(t("Awaiting your review", "Warten auf deine Prüfung", "Pendientes de tu revisión"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    if (state.proposals.isEmpty()) Text(if (state.refreshRevision == 0L)
+                    if (state.proposals.isEmpty() && state.boardProposals.isEmpty()) Text(if (state.refreshRevision == 0L)
                         t("Refresh to check for proposals from your computer.", "Aktualisiere, um Vorschläge vom Computer abzurufen.", "Actualiza para buscar propuestas de tu ordenador.") else
                         t("No pending proposals from the last refresh.", "Keine offenen Vorschläge bei der letzten Aktualisierung.", "No hay propuestas pendientes de la última actualización."),
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -174,6 +197,22 @@ fun DesktopConnectionSection(connection: DesktopConnection, repository: Workspac
                                     copy.quantity(plan.preparationTasks.size, "preparation task", "preparation tasks", "Vorbereitungsaufgabe", "Vorbereitungsaufgaben", "tarea de preparación", "tareas de preparación"), style = MaterialTheme.typography.bodySmall)
                                 TextButton(onClick = { onPlan(plan) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth().testTag("desktop.proposal.${plan.proposalID}"), colors = textColors) {
                                     Text(t("Review proposal", "Vorschlag prüfen", "Revisar propuesta"))
+                                }
+                            }
+                        }
+                    }
+                    state.boardProposals.forEach { envelope ->
+                        val proposal = envelope.proposal
+                        OutlinedCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(proposal.semester.title, style = MaterialTheme.typography.titleSmall)
+                                Text(t("Semester Board proposal", "Semester-Board-Vorschlag", "Propuesta de tablero del semestre"), style = MaterialTheme.typography.bodySmall)
+                                Text(t("Source: ", "Quelle: ", "Fuente: ") + proposal.source, style = MaterialTheme.typography.bodySmall)
+                                Text(copy.quantity(proposal.semester.courses.size, "course", "courses", "Kurs", "Kurse", "curso", "cursos") + " · " +
+                                    copy.quantity(proposal.semester.courses.sumOf { it.assessments.size }, "assessment", "assessments", "Prüfung oder Frist", "Prüfungen und Fristen", "evaluación", "evaluaciones"), style = MaterialTheme.typography.bodySmall)
+                                TextButton(onClick = { onBoardProposal?.invoke(proposal) }, enabled = !state.busy && onBoardProposal != null,
+                                    modifier = Modifier.fillMaxWidth().testTag("desktop.boardProposal.${proposal.proposalID}"), colors = textColors) {
+                                    Text(t("Review Board proposal", "Board-Vorschlag prüfen", "Revisar propuesta de tablero"))
                                 }
                             }
                         }
@@ -210,14 +249,42 @@ fun DesktopConnectionSection(connection: DesktopConnection, repository: Workspac
                 Text(review.title, style = MaterialTheme.typography.titleMedium)
                 Text(copy.quantity(review.courses, "course", "courses", "Kurs", "Kurse", "curso", "cursos") + " · " +
                     copy.quantity(review.assessments, "assessment", "assessments", "Prüfung oder Frist", "Prüfungen und Fristen", "evaluación", "evaluaciones"))
-                Text(t("Includes assessment notes and recorded states. Your assistant may send this context to its AI provider.", "Enthält Prüfungsnotizen und erfasste Zustände. Dein Assistent kann diesen Kontext an seinen KI-Anbieter senden.", "Incluye notas y estados registrados. Tu asistente puede enviar este contexto a su proveedor de IA."))
+                Text(if (review.includeNotes) t("Includes assessment notes and recorded states. Your assistant may send this context to its AI provider.", "Enthält Prüfungsnotizen und erfasste Zustände. Dein Assistent kann diesen Kontext an seinen KI-Anbieter senden.", "Incluye notas y estados registrados. Tu asistente puede enviar este contexto a su proveedor de IA.") else
+                    t("Includes assessment dates and recorded states; notes are excluded. Your assistant may send this context to its AI provider.", "Enthält Prüfungsdaten und erfasste Zustände; Notizen sind ausgeschlossen. Dein Assistent kann diesen Kontext an seinen KI-Anbieter senden.", "Incluye fechas y estados registrados; se excluyen notas. Tu asistente puede enviar este contexto a su proveedor de IA."))
+                if (review.boardPayload != null) {
+                    Text(if (review.includeWeekProgress) t("Also shares this Semester Board's recorded weekly statuses" + if (review.includeNotes) " and weekly notes." else ". Weekly notes are excluded.",
+                        "Teilt auch die erfassten Wochenzustände dieses Semester Boards" + if (review.includeNotes) " und Wochennotizen." else ". Wochennotizen sind ausgeschlossen.",
+                        "También comparte los estados semanales registrados de este tablero" + if (review.includeNotes) " y notas semanales." else ". Se excluyen las notas semanales.") else
+                        t("Weekly progress and weekly notes are excluded from Semester Board context.", "Wochenfortschritt und Wochennotizen sind vom Semester-Board-Kontext ausgeschlossen.", "El contexto del tablero excluye el progreso y las notas semanales."))
+                    if (review.includeNotes) Text(t("Course schedule notes are also included. Source URLs and device reminder settings are excluded.",
+                        "Kursplannotizen sind ebenfalls enthalten. Quellen-URLs und Erinnerungseinstellungen des Geräts sind ausgeschlossen.",
+                        "También se incluyen notas del horario del curso. Se excluyen las URL de fuentes y los ajustes de recordatorios del dispositivo."), style = MaterialTheme.typography.bodySmall)
+                    if (review.derivedTeachingEnd) Text(t("The teaching end date is calculated from the recorded start and week count. It was not recorded separately as a university date.",
+                        "Das Ende der Lehrwochen wird aus dem erfassten Start und der Wochenzahl berechnet. Es wurde nicht separat als Universitätsdatum erfasst.",
+                        "El final de las semanas lectivas se calcula a partir del inicio y el número de semanas registrados. No se registró por separado como una fecha universitaria."),
+                        style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("desktop.share.derivedTeachingEnd"))
+                }
+                if (review.unresolvedClocks > 0) Text(copy.quantity(review.unresolvedClocks,
+                    "recorded assessment time needs review", "recorded assessment times need review",
+                    "erfasste Prüfungszeit muss geprüft werden", "erfasste Prüfungszeiten müssen geprüft werden",
+                    "hora de evaluación registrada necesita revisión", "horas de evaluaciones registradas necesitan revisión") + ". " +
+                    t("The original dates and times are shared unchanged. Check them against the source schedule before using them for scheduling.",
+                        "Die ursprünglichen Daten und Zeiten werden unverändert geteilt. Prüfe sie anhand des Quellenplans, bevor du sie für Termine verwendest.",
+                        "Las fechas y horas originales se comparten sin cambios. Compruébalas con el horario de origen antes de usarlas para programar."),
+                    style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("desktop.share.unresolvedClocks"))
                 Text(t("Other semesters, tasks, habits and Calendar events stay on this phone.", "Andere Semester, Aufgaben, Gewohnheiten und Kalenderereignisse bleiben auf diesem Telefon.", "Otros semestres, tareas, hábitos y eventos del calendario permanecen en este teléfono."), style = MaterialTheme.typography.bodySmall)
                 if (!unchanged) Text(t("Your records changed. Close this review and open it again before sharing.", "Deine Daten wurden geändert. Schliesse diese Prüfung und öffne sie vor dem Teilen erneut.", "Tus registros cambiaron. Cierra y vuelve a abrir esta revisión antes de compartir."), color = MaterialTheme.colorScheme.error)
-            } }, confirmButton = { TextButton(onClick = { submit { connection.publishContext(review.payload); shareReview = null } },
+            } }, confirmButton = { TextButton(onClick = { submit {
+                require(repository.state.value.snapshot.revision == review.revision && !repository.state.value.recoveryRequired) {
+                    t("Your records changed. Review the selected context again before sharing.", "Deine Daten wurden geändert. Prüfe den gewählten Kontext vor dem Teilen erneut.", "Tus registros cambiaron. Revisa de nuevo el contexto seleccionado antes de compartir.")
+                }
+                connection.publishSelectedContext(review.payload, review.boardPayload); shareReview = null
+            } },
                 enabled = unchanged && state.paired && !state.busy && !workspace.recoveryRequired, modifier = Modifier.testTag("desktop.share.confirm"), colors = textColors) {
                 Text(t("Share selected semester", "Gewähltes Semester teilen", "Compartir semestre seleccionado"))
             } }, dismissButton = { TextButton(onClick = { shareReview = null }, colors = textColors) { Text(t("Cancel", "Abbrechen", "Cancelar")) } }, modifier = Modifier.testTag("desktop.share.review"))
     }
 }
 
-private data class DesktopShareReview(val title: String, val payload: String, val revision: Long, val courses: Int, val assessments: Int)
+private data class DesktopShareReview(val title: String, val payload: String, val revision: Long, val courses: Int, val assessments: Int,
+    val boardPayload: String?, val includeNotes: Boolean, val includeWeekProgress: Boolean, val unresolvedClocks: Int, val derivedTeachingEnd: Boolean)
